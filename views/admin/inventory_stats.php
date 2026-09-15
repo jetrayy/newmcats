@@ -1,0 +1,320 @@
+<?php
+session_start();
+include_once __DIR__ . '/../../db.php';
+
+// SECURITY: Only allow Super Admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'super_admin') {
+    header("Location: ../../index.php");
+    exit();
+}
+
+// 1. Fetch Revenue Data (Last 7 Days)
+$revenue_labels = [];
+$revenue_data = [];
+
+for ($i = 6; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $revenue_labels[] = date('M d', strtotime($date));
+    
+    $start = $date . ' 00:00:00';
+    $end = $date . ' 23:59:59';
+    
+    $q = "SELECT SUM(received_amount - balance_amount) as daily_total FROM transactions WHERE transaction_date BETWEEN ? AND ? AND status != 'cancelled'";
+    $stmt = $conn->prepare($q);
+    $stmt->bind_param("ss", $start, $end);
+    $stmt->execute();
+    $res = $stmt->get_result()->fetch_assoc();
+    
+    $revenue_data[] = $res['daily_total'] ? (float)$res['daily_total'] : 0;
+}
+
+// 2. Fetch Stocks and Sales Data for Items
+$item_labels = [];
+$stock_data = [];
+$sales_data = [];
+
+// Get all items and their sold quantities
+$items_q = "
+    SELECT 
+        i.item_id, 
+        i.item_name, 
+        i.stock_quantity,
+        NVL(SUM(ti.quantity), 0) as total_sold
+    FROM inventory i
+    LEFT JOIN transaction_items ti ON i.item_id = ti.item_id
+    GROUP BY i.item_id, i.item_name, i.stock_quantity
+    ORDER BY i.item_id ASC
+";
+$items_res = $conn->query($items_q);
+
+while ($row = $items_res->fetch_assoc()) {
+    // Truncate long names for chart labels
+    $name = strlen($row['item_name']) > 15 ? substr($row['item_name'], 0, 15) . '...' : $row['item_name'];
+    $item_labels[] = $name;
+    $stock_data[] = (int)$row['stock_quantity'];
+    $sales_data[] = (int)$row['total_sold'];
+}
+
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCATS | Inventory Analytics</title>
+    <link rel="icon" type="image/x-icon" href="../../img/ico.ico">
+    <!-- Instant theme apply — prevents flash -->
+    <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'light');</script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Luxury Executive Design System -->
+    <link rel="stylesheet" href="../../css/luxury.css">
+    <style>
+        canvas { width: 100% !important; height: 350px !important; }
+    </style>
+</head>
+<body>
+
+    <!-- Mobile Navbar -->
+    <nav class="navbar navbar-dark d-md-none px-3" style="background: var(--obsidian-sidebar); border-bottom: 1px solid var(--obsidian-border);">
+        <span class="navbar-brand mb-0 h1 luxury-brand-title">MCATS SA</span>
+        <button class="navbar-toggler border-0" type="button" data-bs-toggle="offcanvas" data-bs-target="#sidebarMenu">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block luxury-sidebar offcanvas-md offcanvas-start">
+                <div class="position-sticky pt-3 px-3">
+                    <div class="d-none d-md-block mb-4 text-center pb-3 border-bottom" style="border-color: var(--obsidian-border) !important;">
+                        <img src="../../img/logo.png" style="width: 70px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));" class="mb-2" alt="MCATS Logo">
+                        <h4 class="luxury-brand-title m-0">MCATS SA</h4>
+                        <small class="text-white-50" style="font-size: 0.725rem; letter-spacing: 0.1em;">EXECUTIVE CONTROL</small>
+                    </div>
+                    <div class="nav flex-column">
+                        <a href="sahome.php" class="luxury-nav-link"><i class="fa-solid fa-gauge"></i>Dashboard</a>
+                        <a href="inventory_stats.php" class="luxury-nav-link active"><i class="fa-solid fa-chart-pie"></i>Inventory Stats</a>
+                        <a href="sessions_report.php" class="luxury-nav-link"><i class="fa-solid fa-calendar-day"></i>Day Sessions</a>
+                        <a href="reports.php" class="luxury-nav-link"><i class="fa-solid fa-file-invoice-dollar"></i>Reports</a>
+                        <a href="../../logout.php" class="luxury-nav-link logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 py-4">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-2 pb-3 mb-4 border-bottom position-relative" style="border-color: var(--border-subtle) !important;">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="luxury-badge luxury-badge-gold"><i class="fa-solid fa-chart-line"></i> Analytics & Trends</span>
+                        </div>
+                        <h1 class="h2 mb-0">Inventory Performance Analytics</h1>
+                        <p class="text-muted small mb-0 mt-1">Visualize revenue trends, stock balance, and sales velocity</p>
+                    </div>
+                    <div class="d-flex align-items-center gap-3 mt-3 mt-md-0">
+                        <a href="sahome.php" class="btn btn-luxury-outline">
+                            <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
+                        </a>
+                        <button id="themeToggle" class="theme-toggle-btn">🌙 Dark Mode</button>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <!-- Revenue Chart -->
+                    <div class="col-lg-6">
+                        <div class="luxury-card p-4 h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; background: rgba(16, 185, 129, 0.12); color: var(--success-emerald);">
+                                        <i class="fa-solid fa-money-bill-trend-up"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-0 fw-bold">Revenue Velocity</h5>
+                                        <small class="text-muted">Last 7 Days Turnover</small>
+                                    </div>
+                                </div>
+                                <span class="luxury-badge luxury-badge-emerald">Live Trend</span>
+                            </div>
+                            <div style="height: 340px; position: relative;">
+                                <canvas id="revenueChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Stocks vs Sales Chart -->
+                    <div class="col-lg-6">
+                        <div class="luxury-card p-4 h-100">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 38px; height: 38px; background: var(--gold-subtle-bg); color: var(--gold-primary);">
+                                        <i class="fa-solid fa-chart-column"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="mb-0 fw-bold">Stock vs. Sales Volume</h5>
+                                        <small class="text-muted">Inventory Units vs Units Dispatched</small>
+                                    </div>
+                                </div>
+                                <span class="luxury-badge luxury-badge-gold">Stock Audit</span>
+                            </div>
+                            <div style="height: 340px; position: relative;">
+                                <canvas id="stocksChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Theme Toggle
+        const toggleBtn = document.getElementById('themeToggle');
+        const html = document.documentElement;
+        
+        let chartLineColor = 'rgba(15, 23, 42, 0.08)';
+        let chartGridColor = 'rgba(15, 23, 42, 0.05)';
+        let chartTextColor = '#64748b';
+
+        function applyChartTheme() {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                chartLineColor = 'rgba(255, 255, 255, 0.1)';
+                chartGridColor = 'rgba(255, 255, 255, 0.05)';
+                chartTextColor = '#94a3b8';
+            } else {
+                chartLineColor = 'rgba(15, 23, 42, 0.08)';
+                chartGridColor = 'rgba(15, 23, 42, 0.05)';
+                chartTextColor = '#64748b';
+            }
+            Chart.defaults.color = chartTextColor;
+            Chart.defaults.scale.grid.color = chartGridColor;
+            Chart.defaults.scale.grid.borderColor = chartLineColor;
+        }
+
+        function updateToggleText() {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                toggleBtn.innerHTML = '☀️ Light Mode';
+            } else {
+                toggleBtn.innerHTML = '🌙 Dark Mode';
+            }
+        }
+
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            updateToggleText();
+        }
+
+        applyChartTheme();
+
+        toggleBtn.addEventListener('click', () => {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                html.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            updateToggleText();
+            applyChartTheme();
+            renderCharts();
+        });
+
+        // Chart Data from PHP
+        const revLabels = <?php echo json_encode($revenue_labels); ?>;
+        const revData = <?php echo json_encode($revenue_data); ?>;
+
+        const itemLabels = <?php echo json_encode($item_labels); ?>;
+        const stockData = <?php echo json_encode($stock_data); ?>;
+        const salesData = <?php echo json_encode($sales_data); ?>;
+
+        let myRevChart = null;
+        let myStockChart = null;
+
+        function renderCharts() {
+            if (myRevChart) myRevChart.destroy();
+            if (myStockChart) myStockChart.destroy();
+
+            // Revenue Line Chart with Luxury Gold / Emerald
+            const ctxRev = document.getElementById('revenueChart').getContext('2d');
+            const goldGrad = ctxRev.createLinearGradient(0, 0, 0, 300);
+            goldGrad.addColorStop(0, 'rgba(212, 175, 55, 0.35)');
+            goldGrad.addColorStop(1, 'rgba(212, 175, 55, 0.0)');
+
+            myRevChart = new Chart(ctxRev, {
+                type: 'line',
+                data: {
+                    labels: revLabels,
+                    datasets: [{
+                        label: 'Revenue (Rs.)',
+                        data: revData,
+                        borderColor: '#d4af37',
+                        backgroundColor: goldGrad,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#d4af37',
+                        pointBorderColor: '#fff',
+                        pointHoverRadius: 6,
+                        fill: true,
+                        tension: 0.35
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) { return 'Rs. ' + value.toLocaleString(); }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Stocks vs Sales Bar Chart
+            const ctxStock = document.getElementById('stocksChart').getContext('2d');
+            myStockChart = new Chart(ctxStock, {
+                type: 'bar',
+                data: {
+                    labels: itemLabels,
+                    datasets: [
+                        {
+                            label: 'Available Stock',
+                            data: stockData,
+                            backgroundColor: '#3b82f6',
+                            borderRadius: 6
+                        },
+                        {
+                            label: 'Dispatched / Sold',
+                            data: salesData,
+                            backgroundColor: '#d4af37',
+                            borderRadius: 6
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { stacked: false },
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        // Initial Render
+        renderCharts();
+    </script>
+</body>
+</html>

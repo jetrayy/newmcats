@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCATS | Mahinda Constructions & ToolShop</title>
+    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
+    <!-- Instant theme apply — prevents flash -->
+    <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');</script>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Luxury Executive Design System -->
+    <link rel="stylesheet" href="/css/luxury.css">
+    
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            height: 100vh;
+            background-color: var(--obsidian-dark);
+        }
+        
+        .left-panel {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(180deg, #0b1120 0%, #070a12 100%);
+            border-right: 1px solid rgba(255, 255, 255, 0.08);
+            height: 100vh;
+            overflow-y: auto;
+            position: relative;
+        }
+
+        .left-panel::before {
+            content: '';
+            position: absolute;
+            top: -20%;
+            left: -20%;
+            width: 70%;
+            height: 70%;
+            background: radial-gradient(circle, rgba(212, 175, 55, 0.08) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .login-box {
+            width: 100%;
+            max-width: 420px;
+            z-index: 2;
+        }
+
+        .logo-wrap {
+            position: relative;
+            display: inline-block;
+        }
+
+        .logo {
+            width: 130px;
+            filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.5));
+        }
+
+        .brand-subtitle {
+            font-size: 0.8rem;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--gold-primary);
+            font-weight: 600;
+        }
+
+        .right-panel {
+            background: linear-gradient(135deg, rgba(7, 10, 18, 0.85) 0%, rgba(11, 17, 32, 0.92) 100%), url('/img/loginimg.jpg') center center/cover no-repeat;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            border-radius: 9999px;
+            background: rgba(212, 175, 55, 0.12);
+            border: 1px solid rgba(212, 175, 55, 0.3);
+            color: var(--gold-primary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                overflow: auto;
+            }
+            .left-panel {
+                min-height: 100vh;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container-fluid p-0">
+        <div class="row g-0 h-100">
+            <!-- LEFT LOGIN AREA -->
+            <div class="col-12 col-md-5 col-lg-4 left-panel p-4 p-md-5">
+                <div class="login-box">
+                    <div class="text-center mb-4">
+                        <div class="logo-wrap mb-3">
+                            <img src="/img/logo.png" class="logo" alt="MCATS Logo">
+                        </div>
+                        <span class="brand-subtitle d-block mb-1">Mahinda Constructions & ToolShop</span>
+                        <h2 class="text-white fw-bold mb-1">System Portal</h2>
+                        <p class="text-muted small">Enter your credentials to access the terminal</p>
+                    </div>
+
+                    <div id="loginAlertBox">
+                    <% const err = (typeof errorMessage !== 'undefined' && errorMessage) || (typeof error_message !== 'undefined' && error_message) || ''; %>
+                    <% if (err) { %>
+                        <div class="alert alert-danger py-2 px-3 mb-4 rounded-3 d-flex align-items-center gap-2 border-0" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;" role="alert">
+                            <i class="fa-solid fa-circle-exclamation"></i>
+                            <span class="small fw-semibold"><%= err %></span>
+                        </div>
+                    <% } %>
+                    </div>
+
+                    <form id="loginForm" method="POST" action="/index.php">
+                        <div class="mb-3">
+                            <label class="form-label text-white-50 small fw-semibold">Username</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent border-end-0 text-muted" style="border-color: rgba(255,255,255,0.12);"><i class="fa-solid fa-user"></i></span>
+                                <input type="text" id="usernameInput" class="form-control luxury-input border-start-0" name="username" placeholder="e.g. sa or admin" required style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);" value="admin">
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="form-label text-white-50 small fw-semibold">Password</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-transparent border-end-0 text-muted" style="border-color: rgba(255,255,255,0.12);"><i class="fa-solid fa-lock"></i></span>
+                                <input type="password" id="passwordInput" class="form-control luxury-input border-start-0" name="password" placeholder="••••••••" required style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);" value="admin@2026">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="submitBtn" name="submit" class="btn btn-luxury-gold btn-lg w-100 fw-bold">
+                            Authenticate & Enter <i class="fa-solid fa-arrow-right ms-2"></i>
+                        </button>
+                    </form>
+
+                    <div class="mt-4 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.04); border: 1px dashed rgba(212, 175, 55, 0.3);">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small text-white-50 fw-bold"><i class="fa-solid fa-key text-warning me-1"></i> Demo Credentials:</span>
+                            <span class="badge bg-dark text-warning border border-warning-subtle" style="font-size: 0.68rem;">1-Click Login</span>
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <button type="button" class="btn btn-sm w-100 text-start py-2 px-2 rounded-2" onclick="quickLogin('admin', 'admin@2026')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff;">
+                                    <div class="fw-bold small text-warning"><i class="fa-solid fa-user-shield me-1"></i> Cashier</div>
+                                    <div class="text-white-50" style="font-size: 0.72rem;">admin / admin@2026</div>
+                                </button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-sm w-100 text-start py-2 px-2 rounded-2" onclick="quickLogin('sa', 'sa@2026')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff;">
+                                    <div class="fw-bold small" style="color: #60a5fa;"><i class="fa-solid fa-crown me-1"></i> Super Admin</div>
+                                    <div class="text-white-50" style="font-size: 0.72rem;">sa / sa@2026</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4 text-center pt-3 border-top" style="border-color: rgba(255,255,255,0.08) !important;">
+                        <span class="text-muted small d-block mb-1">
+                            <i class="fa-solid fa-shield-halved me-1 text-warning"></i> Secure Terminal Access
+                        </span>
+                        <span class="text-white-50 small" style="font-size: 0.75rem;">140/2, Kandy Road, Rikillagaskada</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT SHOWCASE -->
+            <div class="col-md-7 col-lg-8 right-panel d-none d-md-flex p-5 text-white">
+                <div style="max-width: 620px;">
+                    <div class="hero-badge">
+                        <i class="fa-solid fa-gem"></i> Executive Retail & Rental Suite
+                    </div>
+                    <h1 class="display-4 fw-bold mb-3" style="font-family: var(--font-heading); letter-spacing: -0.02em;">
+                        Streamlined Operations for Hardware & Heavy Tools
+                    </h1>
+                    <p class="text-white-50 fs-5 mb-4" style="font-weight: 300; line-height: 1.6;">
+                        Seamless cash session control, real-time inventory tracking, and swift selling & equipment rental lifecycles tailored for Mahinda Constructions.
+                    </p>
+                    <div class="d-flex gap-4 pt-2">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; background: rgba(212, 175, 55, 0.15); color: var(--gold-primary);">
+                                <i class="fa-solid fa-cart-shopping"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold">Instant Selling</h6>
+                                <small class="text-white-50">Thermal receipts</small>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; background: rgba(16, 185, 129, 0.15); color: #6ee7b7;">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold">POS Rentals</h6>
+                                <small class="text-white-50">2-stage checkouts</small>
+                            </div>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="rounded-circle p-2 d-flex align-items-center justify-content-center" style="width: 44px; height: 44px; background: rgba(59, 130, 246, 0.15); color: #93c5fd;">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0 fw-bold">Inventory</h6>
+                                <small class="text-white-50">Stock control</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- Resilient Login & Iframe Session Script -->
+    <script>
+        function showAlert(msg) {
+            const box = document.getElementById('loginAlertBox');
+            box.innerHTML = `
+                <div class="alert alert-danger py-2 px-3 mb-4 rounded-3 d-flex align-items-center gap-2 border-0" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;" role="alert">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span class="small fw-semibold">\${msg}</span>
+                </div>
+            `;
+        }
+
+        function quickLogin(username, password) {
+            document.getElementById('usernameInput').value = username;
+            document.getElementById('passwordInput').value = password;
+            executeLogin(username, password);
+        }
+
+        async function executeLogin(username, password) {
+            const btn = document.getElementById('submitBtn');
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Authenticating...';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password, is_ajax: true })
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success && data.redirect) {
+                    if (data.token) {
+                        try { localStorage.setItem('mcats_auth_token', data.token); } catch(e){}
+                    }
+                    window.location.href = data.redirect;
+                } else {
+                    showAlert(data.error || 'Invalid credentials provided. Please check username and password.');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                // If fetch fails for any reason, fall back to standard HTML form submission
+                document.getElementById('loginForm').submit();
+            }
+        }
+
+        // Form submit handler
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const u = document.getElementById('usernameInput').value;
+            const p = document.getElementById('passwordInput').value;
+            executeLogin(u, p);
+        });
+
+        // Check logout or resume existing token
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('logout')) {
+                try { localStorage.removeItem('mcats_auth_token'); } catch(e){}
+                return;
+            }
+
+            const existingToken = localStorage.getItem('mcats_auth_token');
+            if (existingToken) {
+                fetch('/api/auth/check?auth_token=' + encodeURIComponent(existingToken))
+                    .then(res => res.json())
+                    .then(data => {
+                        if (data && data.authenticated && data.redirect) {
+                            window.location.href = data.redirect;
+                        } else {
+                            try { localStorage.removeItem('mcats_auth_token'); } catch(e){}
+                        }
+                    })
+                    .catch(() => {});
+            }
+        })();
+    </script>
+</body>
+</html>

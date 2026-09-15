@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCATS | POS Rental Terminal</title>
+    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
+    <!-- Instant theme apply — prevents flash -->
+    <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'light');</script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Luxury Core CSS -->
+    <link rel="stylesheet" href="/css/luxury.css">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--luxury-body-bg); overflow-x: hidden; }
+        .product-card {
+            background: var(--luxury-card-bg);
+            border: 1px solid var(--luxury-card-border);
+            border-radius: var(--radius-lg);
+            transition: all 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+            cursor: pointer;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        .product-card:hover:not(.unavailable) {
+            transform: translateY(-4px);
+            border-color: rgba(212, 175, 55, 0.5);
+            box-shadow: var(--shadow-glow);
+        }
+        .product-card.unavailable {
+            opacity: 0.55;
+            filter: grayscale(80%);
+            cursor: not-allowed;
+        }
+        .product-img-wrap {
+            height: 145px;
+            overflow: hidden;
+            position: relative;
+            background: rgba(0, 0, 0, 0.04);
+        }
+        .product-img {
+            height: 100%;
+            width: 100%;
+            object-fit: cover;
+            transition: transform 0.4s ease;
+        }
+        .product-card:hover:not(.unavailable) .product-img {
+            transform: scale(1.06);
+        }
+        .cart-section {
+            height: 100vh;
+            overflow-y: auto;
+            background: var(--luxury-card-bg);
+            border-left: 1px solid var(--luxury-card-border);
+            box-shadow: -8px 0 25px rgba(0, 0, 0, 0.04);
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .products-section {
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .luxury-search {
+            border-radius: var(--radius-full);
+            background: var(--luxury-card-bg);
+            border: 1px solid var(--luxury-card-border);
+            padding: 0.75rem 1.25rem;
+            transition: all 0.2s ease;
+        }
+        .luxury-search:focus-within {
+            border-color: var(--gold-primary);
+            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18);
+        }
+        .fly-item {
+            position: absolute;
+            z-index: 1050;
+            transition: all 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
+            pointer-events: none;
+            border-radius: 50%;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.35);
+        }
+        .cart-item-row {
+            background: var(--luxury-card-bg);
+            border: 1px solid var(--luxury-card-border);
+            border-radius: var(--radius-md);
+            transition: all 0.2s ease;
+        }
+        .cart-item-row:hover {
+            border-color: rgba(212, 175, 55, 0.35);
+        }
+        @media (max-width: 991.98px) {
+            .products-section, .cart-section { height: auto; position: static; overflow-y: visible; }
+            .cart-section { border-left: none; border-top: 1px solid var(--luxury-card-border); padding-bottom: 90px; }
+        }
+    </style>
+</head>
+<body>
+
+    <datalist id="customerList">
+        <% if (customers && customers.length > 0) { %>
+            <% customers.forEach(function(cust) { %>
+                <option value="<%= cust.nic_number %>"><%= cust.full_name %> (<%= cust.phone_number %>)</option>
+                <option value="<%= cust.phone_number %>"><%= cust.full_name %> (NIC: <%= cust.nic_number %>)</option>
+            <% }); %>
+        <% } %>
+    </datalist>
+
+    <div class="container-fluid p-0">
+        <div class="row g-0">
+            <!-- Left Side: Rental Fleet -->
+            <div class="col-lg-7 col-xl-8 products-section p-3 p-md-4">
+                <div class="d-flex justify-content-between align-items-center mb-4 pb-3 border-bottom border-secondary-subtle flex-wrap gap-2">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge text-uppercase" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-size: 0.72rem; letter-spacing: 0.1em; font-weight: 700;">Rental Channel</span>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 small px-2 py-0.5">Session #<%= sessionId %> Active</span>
+                        </div>
+                        <h2 class="mb-0 fw-bold d-flex align-items-center gap-2" style="font-family: 'Outfit', sans-serif;">
+                            <i class="fa-solid fa-camera-retro" style="color: var(--gold-primary);"></i>
+                            POS Rentals
+                        </h2>
+                        <div id="realtimeClock" class="text-secondary small mt-1"></div>
+                    </div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <button id="themeToggle" class="btn btn-outline-secondary rounded-pill btn-sm d-none d-md-flex align-items-center gap-1 shadow-sm px-3">
+                            <i class="fa-solid fa-moon"></i> <span>Dark Mode</span>
+                        </button>
+                        <a href="/views/admin/home.php" class="btn btn-outline-secondary rounded-pill btn-sm shadow-sm px-3 fw-semibold">
+                            <i class="fa-solid fa-arrow-left me-1"></i> Hub
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Theme Toggle Mobile -->
+                <div class="d-md-none mb-3">
+                    <button id="themeToggleMobile" class="btn btn-outline-secondary rounded-pill btn-sm w-100">
+                        <i class="fa-solid fa-moon me-1"></i> Toggle Dark/Light Mode
+                    </button>
+                </div>
+
+                <!-- Search Input -->
+                <div class="luxury-search d-flex align-items-center mb-4 shadow-sm">
+                    <i class="fa-solid fa-magnifying-glass text-secondary me-3 fs-5"></i>
+                    <input type="text" id="itemSearch" class="form-control border-0 p-0 shadow-none bg-transparent fs-6" placeholder="Search rental gear by item name, model, or code..." onkeyup="filterItems()">
+                </div>
+
+                <% if (msg) { %>
+                    <%- msg %>
+                <% } %>
+
+                <!-- Rental Gear Grid -->
+                <div class="row g-3 mt-2" id="productGrid">
+                    <% if (items && items.length > 0) { %>
+                        <% items.forEach(function(item) { 
+                            const id = item.item_id;
+                            const name = item.item_name || 'Rental Item';
+                            const price = Number(item.price_per_unit || 0);
+                            const status = item.status || 'available';
+                            const isAvail = (status === 'available' || status === '');
+                            const img = item.item_image && item.item_image !== 'default.png' && item.item_image !== 'placeholder.jpg' ? '/img/' + item.item_image : '/img/logo.png';
+                        %>
+                        <div class="col-6 col-sm-4 col-md-4 col-xl-3 product-wrapper">
+                            <div class="card h-100 product-card <%= isAvail ? '' : 'unavailable' %>" data-id="<%= id %>" data-name="<%= name %>" data-price="<%= price %>">
+                                <div class="product-img-wrap d-flex align-items-center justify-content-center">
+                                    <div class="position-absolute top-0 end-0 p-2 z-1">
+                                        <span class="badge rounded-pill <%= isAvail ? 'bg-success' : 'bg-danger' %> shadow-sm" style="font-size: 0.65rem;">
+                                            <%= isAvail ? 'Available' : 'Rented Out' %>
+                                        </span>
+                                    </div>
+                                    <img src="<%= img %>" loading="lazy" alt="Rental" class="product-img object-fit-contain p-2">
+                                </div>
+                                <div class="card-body p-2 d-flex flex-column justify-content-between text-center">
+                                    <div>
+                                        <h6 class="card-title fw-bold mb-1 text-truncate" title="<%= name %>" style="font-size: 0.86rem;"><%= name %></h6>
+                                        <div class="fw-bold text-nowrap mb-2" style="color: var(--gold-primary); font-size: 0.95rem;">
+                                            Rs. <%= price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+                                        </div>
+                                    </div>
+                                    <% if (isAvail) { %>
+                                        <button class="btn btn-luxury-gold btn-sm w-100 fw-bold rounded-pill" onclick="addToCart(this)">
+                                            <i class="fa-solid fa-plus me-1"></i> Add to POS
+                                        </button>
+                                    <% } else { %>
+                                        <button class="btn btn-secondary btn-sm w-100 fw-bold disabled border-0 rounded-pill opacity-50">On Lease</button>
+                                    <% } %>
+                                </div>
+                            </div>
+                        </div>
+                        <% }); %>
+                    <% } else { %>
+                        <div class="col-12">
+                            <div class="p-5 text-center rounded-4 border border-secondary-subtle" style="background: var(--luxury-card-bg);">
+                                <i class="fa-solid fa-camera-retro fs-1 d-block mb-3" style="color: var(--gold-primary); opacity: 0.6;"></i>
+                                <h5 class="fw-bold">No Rental Gear Registered</h5>
+                                <p class="text-secondary small mb-0">Add rental equipment in Inventory with category "Rental Items".</p>
+                            </div>
+                        </div>
+                    <% } %>
+                </div>
+            </div>
+
+            <!-- Right Side: Forms & Rental Register -->
+            <div class="col-lg-5 col-xl-4 cart-section p-3 p-md-4 d-flex flex-column">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom border-secondary-subtle">
+                    <div>
+                        <span class="badge text-uppercase" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-size: 0.68rem; letter-spacing: 0.1em; font-weight: 700;">Rental Docket</span>
+                        <h4 class="mb-0 fw-bold" style="font-family: 'Outfit', sans-serif;">Selected Gear</h4>
+                    </div>
+                    <div class="position-relative d-inline-flex p-2 rounded-3" style="background: rgba(212, 175, 55, 0.1);">
+                        <i id="cartIcon" class="fa-solid fa-cart-flatbed fs-5" style="color: var(--gold-primary);"></i>
+                        <span id="cartCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem; display:none;">0</span>
+                    </div>
+                </div>
+                
+                <!-- Selected Items Box -->
+                <div class="overflow-auto rounded-4 p-2 mb-3" id="cartItemsContainer" style="background: rgba(0, 0, 0, 0.03); border: 1px dashed var(--luxury-card-border); min-height: 130px; max-height: 180px;">
+                    <div class="text-center text-secondary py-4">
+                        <i class="fa-regular fa-clipboard fs-3 d-block mb-1 opacity-25"></i>
+                        <span class="small fw-semibold">No equipment added yet</span>
+                    </div>
+                </div>
+
+                <!-- Total Valuation -->
+                <div class="p-3 rounded-4 mb-3" style="background: rgba(212, 175, 55, 0.06); border: 1px solid rgba(212, 175, 55, 0.2);">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="fw-bold text-secondary text-uppercase small" style="letter-spacing: 0.05em;">Equipment Daily Value</span>
+                        <span class="fs-5 fw-bold" id="cartTotal" style="color: var(--gold-primary); font-family: 'Outfit', sans-serif;">Rs. 0.00</span>
+                    </div>
+                </div>
+
+                <!-- Customer Details & Rental Payment Form -->
+                <form method="POST" action="/views/pos/rent.php" id="rentForm" class="mt-auto">
+                    <!-- Customer Information Card -->
+                    <div class="card border-0 rounded-4 mb-3 p-3" style="background: var(--luxury-card-bg); border: 1px solid var(--luxury-card-border) !important;">
+                        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary-subtle pb-2 mb-3">
+                            <h6 class="fw-bold mb-0 d-flex align-items-center gap-2">
+                                <i class="fa-regular fa-id-card" style="color: var(--gold-primary);"></i>
+                                Customer Dossier
+                            </h6>
+                            <a href="/views/pos/select_customer.php" class="btn btn-luxury-gold btn-sm rounded-pill px-3 fw-bold" style="font-size: 0.76rem;">
+                                <i class="fa-solid fa-users me-1"></i> Search Directory
+                            </a>
+                        </div>
+                        
+                        <% if (sel) { %>
+                        <div class="p-2 mb-3 rounded-3 d-flex align-items-center gap-2" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3);">
+                            <i class="fa-solid fa-circle-check text-success"></i>
+                            <span class="small fw-bold text-success">Loaded: <%= sel.full_name %></span>
+                        </div>
+                        <% } %>
+
+                        <div class="row g-2 mb-2">
+                            <div class="col-12">
+                                <input type="text" name="customer_name" class="form-control form-control-sm" placeholder="Full Client Name *" required value="<%= sel ? sel.full_name : '' %>">
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <input type="text" name="nic" class="form-control form-control-sm" placeholder="NIC / Passport" value="<%= sel ? (sel.nic_number || '') : '' %>">
+                            </div>
+                            <div class="col-6">
+                                <input type="text" name="phone" class="form-control form-control-sm" placeholder="Phone Number *" required value="<%= sel ? sel.phone_number : '' %>">
+                            </div>
+                        </div>
+                        <input type="text" name="address" class="form-control form-control-sm mb-2" placeholder="Residential / Business Address" value="<%= sel ? (sel.address || '') : '' %>">
+                        
+                        <div class="form-check form-switch mt-1">
+                            <input class="form-check-input" type="checkbox" name="free_eq" value="yes" id="freeEq" onchange="document.getElementById('freeEqDesc').style.display = this.checked ? 'block' : 'none';">
+                            <label class="form-check-label small fw-semibold" for="freeEq">Include Free Auxiliary Accessories</label>
+                        </div>
+                        <input type="text" name="free_eq_desc" id="freeEqDesc" class="form-control form-control-sm mt-2 border-secondary-subtle" placeholder="Cables, filters, straps given complimentary..." style="display:none;">
+                    </div>
+
+                    <!-- Payment & Advance Card -->
+                    <div class="card border-0 rounded-4 mb-3 p-3" style="background: var(--luxury-card-bg); border: 1px solid var(--luxury-card-border) !important;">
+                        <h6 class="fw-bold mb-3 border-bottom border-secondary-subtle pb-2 d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-money-bill-wave" style="color: var(--gold-primary);"></i>
+                            Deposit & Advance Terms
+                        </h6>
+                        
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label fw-bold small text-secondary mb-1">Advance (LKR)</label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-transparent border-secondary-subtle fw-bold" style="color: var(--gold-primary);">Rs.</span>
+                                    <input type="number" name="advance" id="advancePayment" class="form-control fw-bold" min="0" placeholder="0.00" value="0.00" oninput="calculateRentBalance()">
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label fw-bold small text-secondary mb-1">Cash Received</label>
+                                <div class="input-group input-group-sm">
+                                    <span class="input-group-text bg-transparent border-secondary-subtle fw-bold" style="color: var(--gold-primary);">Rs.</span>
+                                    <input type="number" name="received_amount" id="rentReceived" class="form-control fw-bold" min="0" placeholder="0.00" oninput="calculateRentBalance()">
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between align-items-center mt-2 p-2 rounded-3" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25);">
+                            <span class="small fw-bold text-success">Advance Change:</span>
+                            <span id="rentBalance" class="fw-bold fs-6 text-success">Rs. 0.00</span>
+                        </div>
+                    </div>
+
+                    <input type="hidden" name="cart_data" id="cartDataInput">
+                    <button type="submit" name="rent_out" class="btn btn-luxury-gold btn-lg w-100 fw-bold shadow rounded-pill py-3 d-flex align-items-center justify-content-center gap-2 mb-2" id="btnRent" disabled>
+                        <i class="fa-solid fa-signature"></i> Authorize POS Agreement & Print
+                    </button>
+                    
+                    <a href="/views/pos/return_items.php" class="btn btn-outline-secondary btn-sm w-100 fw-bold rounded-pill py-2 shadow-sm d-flex align-items-center justify-content-center gap-2">
+                        <i class="fa-solid fa-rotate-left" style="color: var(--gold-primary);"></i> Equipment Returns Desk
+                    </a>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Theme Toggle
+        const toggleBtn = document.getElementById('themeToggle');
+        const toggleBtnMobile = document.getElementById('themeToggleMobile');
+        const html = document.documentElement;
+
+        function updateThemeBtns(isDark) {
+            const icon = isDark ? '<i class="fa-solid fa-sun text-warning"></i> <span>Light Mode</span>' : '<i class="fa-solid fa-moon"></i> <span>Dark Mode</span>';
+            if (toggleBtn) toggleBtn.innerHTML = icon;
+            if (toggleBtnMobile) toggleBtnMobile.innerHTML = icon;
+        }
+
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            updateThemeBtns(true);
+        }
+
+        function toggleTheme() {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                html.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                updateThemeBtns(false);
+            } else {
+                html.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                updateThemeBtns(true);
+            }
+        }
+
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleTheme);
+        if (toggleBtnMobile) toggleBtnMobile.addEventListener('click', toggleTheme);
+
+        function filterItems() {
+            const query = document.getElementById('itemSearch').value.toLowerCase();
+            const cards = document.querySelectorAll('.product-card');
+            cards.forEach(card => {
+                const title = card.getAttribute('data-name').toLowerCase();
+                const wrapper = card.closest('.product-wrapper');
+                if (wrapper) {
+                    wrapper.style.display = title.includes(query) ? 'block' : 'none';
+                }
+            });
+        }
+
+        let cart = {};
+
+        function addToCart(btn) {
+            const card = btn.closest('.product-card');
+            const id = card.getAttribute('data-id');
+            const name = card.getAttribute('data-name');
+            const price = parseFloat(card.getAttribute('data-price'));
+            const img = card.querySelector('.product-img');
+
+            if (cart[id]) {
+                cart[id].qty += 1;
+            } else {
+                cart[id] = { name: name, price: price, qty: 1, id: id };
+            }
+            updateCartUI();
+            flyToCart(img);
+        }
+
+        function changeQty(id, change) {
+            if (cart[id]) {
+                cart[id].qty += change;
+                if (cart[id].qty <= 0) {
+                    delete cart[id];
+                }
+                updateCartUI();
+            }
+        }
+
+        function updateCartUI() {
+            const container = document.getElementById('cartItemsContainer');
+            const totalEl = document.getElementById('cartTotal');
+            const cartDataInput = document.getElementById('cartDataInput');
+            const btnRent = document.getElementById('btnRent');
+            const cartCountBadge = document.getElementById('cartCount');
+
+            container.innerHTML = '';
+            let total = 0;
+            let totalItems = 0;
+            let cartArray = [];
+
+            for (const id in cart) {
+                const item = cart[id];
+                total += item.price * item.qty;
+                totalItems += item.qty;
+                cartArray.push(item);
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'cart-item-row d-flex justify-content-between align-items-center p-2 mb-2 shadow-sm';
+                itemDiv.innerHTML = `
+                    <div class="flex-grow-1 overflow-hidden me-2">
+                        <div class="fw-bold text-truncate small">${item.name}</div>
+                        <div class="text-secondary small">Rs. ${item.price.toFixed(2)}/day × ${item.qty}</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-1">
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', -1)">-</button>
+                        <span class="fw-bold mx-1 text-center" style="min-width: 22px;">${item.qty}</span>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', 1)">+</button>
+                    </div>
+                `;
+                container.appendChild(itemDiv);
+            }
+
+            if (cartArray.length === 0) {
+                container.innerHTML = '<div class="text-center text-secondary py-4"><i class="fa-regular fa-clipboard fs-3 d-block mb-1 opacity-25"></i><span class="small fw-semibold">No equipment added yet</span></div>';
+                cartCountBadge.style.display = 'none';
+            } else {
+                cartCountBadge.style.display = 'inline-block';
+                cartCountBadge.innerText = totalItems;
+            }
+
+            totalEl.innerText = 'Rs. ' + total.toFixed(2);
+            cartDataInput.value = JSON.stringify(cartArray);
+            btnRent.disabled = cartArray.length === 0;
+        }
+
+        function calculateRentBalance() {
+            const adv = parseFloat(document.getElementById('advancePayment').value) || 0;
+            const rec = parseFloat(document.getElementById('rentReceived').value) || 0;
+            const bal = rec - adv;
+            const balEl = document.getElementById('rentBalance');
+            if (rec > 0 && bal >= 0) {
+                balEl.innerText = 'Rs. ' + bal.toFixed(2);
+                balEl.className = 'fw-bold fs-6 text-success';
+            } else if (rec > 0 && bal < 0) {
+                balEl.innerText = '(Short: Rs. ' + Math.abs(bal).toFixed(2) + ')';
+                balEl.className = 'fw-bold fs-6 text-danger';
+            } else {
+                balEl.innerText = 'Rs. 0.00';
+                balEl.className = 'fw-bold fs-6 text-success';
+            }
+        }
+
+        function flyToCart(imgElement) {
+            const cartIcon = document.getElementById('cartIcon');
+            if (!imgElement || !cartIcon) return;
+            const clone = imgElement.cloneNode(true);
+            const rect = imgElement.getBoundingClientRect();
+            clone.className = 'fly-item';
+            clone.style.width = '70px';
+            clone.style.height = '70px';
+            clone.style.left = rect.left + 'px';
+            clone.style.top = rect.top + 'px';
+            document.body.appendChild(clone);
+            const cartRect = cartIcon.getBoundingClientRect();
+            setTimeout(() => {
+                clone.style.transform = `translate(${cartRect.left - rect.left}px, ${cartRect.top - rect.top}px) scale(0.15)`;
+                clone.style.opacity = '0';
+            }, 10);
+            setTimeout(() => {
+                clone.remove();
+            }, 550);
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            const clockEl = document.getElementById('realtimeClock');
+            if (clockEl) clockEl.innerText = dateStr + ' • ' + timeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+    </script>
+</body>
+</html>

@@ -1,0 +1,559 @@
+/* ==========================================================================
+   MCATS - LUXURY EXECUTIVE DESIGN SYSTEM
+   Mahinda Constructions & ToolShop
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap');
+
+:root {
+    --font-heading: 'Outfit', sans-serif;
+    --font-body: 'Plus Jakarta Sans', sans-serif;
+
+    /* Light Mode Palette */
+    --bg-base: #f8fafc;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f1f5f9;
+    --bg-glass: rgba(255, 255, 255, 0.88);
+    --border-subtle: rgba(15, 23, 42, 0.08);
+    --border-card: rgba(15, 23, 42, 0.06);
+    --border-gold: rgba(212, 175, 55, 0.35);
+
+    /* Text Colors */
+    --text-main: #0f172a;
+    --text-secondary: #334155;
+    --text-muted: #64748b;
+    --text-inverse: #ffffff;
+
+    /* Luxury Accents */
+    --gold-primary: #d4af37;
+    --gold-dark: #b8860b;
+    --gold-light: #fef3c7;
+    --gold-hover: #c59b27;
+    --gold-gradient: linear-gradient(135deg, #d4af37 0%, #b8860b 50%, #996515 100%);
+    --gold-subtle-bg: rgba(212, 175, 55, 0.08);
+    --gold-glow: 0 0 20px rgba(212, 175, 55, 0.25);
+
+    /* Executive Obsidian Palette (Sidebar / Dark surfaces) */
+    --obsidian-dark: #070a12;
+    --obsidian-sidebar: #0b1120;
+    --obsidian-card: #111827;
+    --obsidian-border: rgba(255, 255, 255, 0.08);
+
+    /* Status Colors */
+    --success-emerald: #10b981;
+    --success-gradient: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    --danger-crimson: #ef4444;
+    --info-sapphire: #3b82f6;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+    --shadow-lg: 0 12px 32px -4px rgba(15, 23, 42, 0.08), 0 4px 12px -2px rgba(15, 23, 42, 0.03);
+    --shadow-luxury: 0 20px 40px -15px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04);
+}
+
+[data-bs-theme="dark"] {
+    --bg-base: #070a12;
+    --bg-surface: #0f172a;
+    --bg-surface-elevated: #1e293b;
+    --bg-glass: rgba(15, 23, 42, 0.85);
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-card: rgba(255, 255, 255, 0.06);
+    --border-gold: rgba(212, 175, 55, 0.4);
+
+    --text-main: #f8fafc;
+    --text-secondary: #cbd5e1;
+    --text-muted: #94a3b8;
+    --text-inverse: #070a12;
+
+    --gold-subtle-bg: rgba(212, 175, 55, 0.12);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 14px -2px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 14px 36px -4px rgba(0, 0, 0, 0.5);
+    --shadow-luxury: 0 20px 45px -10px rgba(0, 0, 0, 0.6), 0 0 1px 1px rgba(255, 255, 255, 0.06);
+}
+
+/* ==========================================================================
+   Base Typography & Layout
+   ========================================================================== */
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--bg-base);
+    color: var(--text-main);
+    transition: background-color 0.3s ease, color 0.3s ease;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4, h5, h6, .navbar-brand, .luxury-brand {
+    font-family: var(--font-heading);
+    letter-spacing: -0.02em;
+    font-weight: 700;
+}
+
+/* Custom Slim Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--gold-primary);
+}
+
+/* ==========================================================================
+   Luxury Components
+   ========================================================================== */
+
+/* Cards */
+.luxury-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.25s ease;
+}
+
+.luxury-card:hover {
+    box-shadow: var(--shadow-luxury);
+    border-color: var(--border-gold);
+}
+
+.luxury-glass-panel {
+    background: var(--bg-glass);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    box-shadow: var(--shadow-md);
+}
+
+/* Stat Cards */
+.luxury-stat-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    padding: 1.5rem;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.luxury-stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gold-gradient);
+    opacity: 0.8;
+}
+
+.luxury-stat-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-luxury);
+    border-color: var(--border-gold);
+}
+
+.luxury-stat-value {
+    font-family: var(--font-heading);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    font-size: 2rem;
+    color: var(--text-main);
+}
+
+/* Buttons */
+.btn-luxury-gold {
+    background: var(--gold-gradient);
+    color: #0b1120 !important;
+    font-family: var(--font-body);
+    font-weight: 700;
+    border: none;
+    border-radius: 10px;
+    padding: 0.65rem 1.4rem;
+    letter-spacing: 0.01em;
+    box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35);
+    transition: all 0.25s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.btn-luxury-gold:hover {
+    background: linear-gradient(135deg, #dfbc45 0%, #c59b27 50%, #aa771c 100%);
+    box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+    transform: translateY(-2px);
+    color: #070a12 !important;
+}
+
+.btn-luxury-gold:active {
+    transform: translateY(0);
+}
+
+.btn-luxury-outline {
+    background: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 0.6rem 1.2rem;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.btn-luxury-outline:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--gold-subtle-bg);
+}
+
+.btn-luxury-dark {
+    background: #0f172a;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 0.6rem 1.2rem;
+    transition: all 0.2s ease;
+}
+
+.btn-luxury-dark:hover {
+    background: #1e293b;
+    border-color: var(--gold-primary);
+    color: var(--gold-primary) !important;
+}
+
+/* Sidebar */
+.luxury-sidebar {
+    min-height: 100vh;
+    background: var(--obsidian-sidebar);
+    border-right: 1px solid var(--obsidian-border);
+    transition: all 0.3s ease;
+    z-index: 1040;
+}
+
+.luxury-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1.5rem 1.25rem;
+    text-decoration: none;
+    border-bottom: 1px solid var(--obsidian-border);
+}
+
+.luxury-brand-title {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    background: var(--gold-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+}
+
+.luxury-nav-link {
+    color: #94a3b8;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    margin-bottom: 0.4rem;
+    font-weight: 500;
+    font-size: 0.925rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+    text-decoration: none;
+}
+
+.luxury-nav-link:hover {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.05);
+    transform: translateX(3px);
+}
+
+.luxury-nav-link.active {
+    color: #ffffff;
+    background: linear-gradient(90deg, rgba(212, 175, 55, 0.18) 0%, rgba(212, 175, 55, 0.04) 100%);
+    border-left: 3px solid var(--gold-primary);
+    font-weight: 600;
+}
+
+.luxury-nav-link.active i {
+    color: var(--gold-primary);
+}
+
+.luxury-nav-link.logout {
+    color: #f87171;
+    margin-top: 2rem;
+    background: rgba(239, 68, 68, 0.08);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.luxury-nav-link.logout:hover {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+/* Tables */
+.luxury-table {
+    width: 100%;
+    margin-bottom: 0;
+}
+
+.luxury-table thead th {
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    background: var(--bg-surface-elevated);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 0.9rem 1.2rem;
+}
+
+.luxury-table tbody td {
+    padding: 1rem 1.2rem;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-main);
+    font-size: 0.925rem;
+}
+
+.luxury-table tbody tr {
+    transition: background-color 0.15s ease;
+}
+
+.luxury-table tbody tr:hover {
+    background-color: var(--gold-subtle-bg);
+}
+
+/* Inputs & Form Controls */
+.luxury-input {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    padding: 0.7rem 1rem;
+    font-size: 0.95rem;
+    color: var(--text-main);
+    transition: all 0.2s ease;
+}
+
+.luxury-input:focus {
+    background-color: var(--bg-surface);
+    border-color: var(--gold-primary);
+    box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.2);
+    color: var(--text-main);
+    outline: none;
+}
+
+.luxury-input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Badges */
+.luxury-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 9999px;
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.luxury-badge-gold {
+    background: rgba(212, 175, 55, 0.15);
+    color: #b8860b;
+    border: 1px solid rgba(212, 175, 55, 0.4);
+}
+[data-bs-theme="dark"] .luxury-badge-gold {
+    color: #fef08a;
+}
+
+.luxury-badge-emerald {
+    background: rgba(16, 185, 129, 0.12);
+    color: #059669;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+[data-bs-theme="dark"] .luxury-badge-emerald {
+    color: #6ee7b7;
+}
+
+.luxury-badge-crimson {
+    background: rgba(239, 68, 68, 0.12);
+    color: #dc2626;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+[data-bs-theme="dark"] .luxury-badge-crimson {
+    color: #fca5a5;
+}
+
+.luxury-badge-slate {
+    background: var(--bg-surface-elevated);
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
+}
+
+/* Top Navbar / Header Bar */
+.luxury-topbar {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 1rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Theme Toggle Button */
+.theme-toggle-btn {
+    background: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    border-radius: 9999px;
+    padding: 0.4rem 0.9rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.theme-toggle-btn:hover {
+    border-color: var(--gold-primary);
+    color: var(--gold-primary);
+    background: var(--gold-subtle-bg);
+}
+
+/* Product Card (POS & Catalog) */
+.luxury-product-card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 14px;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.luxury-product-card:hover {
+    transform: translateY(-5px);
+    border-color: var(--gold-primary);
+    box-shadow: var(--shadow-luxury);
+}
+
+.luxury-product-card.unavailable {
+    opacity: 0.55;
+    filter: grayscale(85%);
+    pointer-events: none;
+}
+
+.luxury-product-img-wrap {
+    height: 160px;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg-surface-elevated);
+}
+
+.luxury-product-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.4s ease;
+}
+
+.luxury-product-card:hover .luxury-product-img {
+    transform: scale(1.05);
+}
+
+.luxury-product-price {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    color: var(--gold-primary);
+    font-size: 1.15rem;
+}
+
+/* Register / Cart Terminal Panel */
+.luxury-register-panel {
+    background: var(--bg-surface);
+    border-left: 1px solid var(--border-subtle);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.04);
+}
+
+[data-bs-theme="dark"] .luxury-register-panel {
+    box-shadow: -5px 0 25px rgba(0, 0, 0, 0.4);
+}
+
+.luxury-register-header {
+    padding: 1.25rem 1.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-surface-elevated);
+}
+
+.luxury-register-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem 1.5rem;
+}
+
+.luxury-register-footer {
+    padding: 1.25rem 1.5rem;
+    border-top: 1px solid var(--border-subtle);
+    background: var(--bg-surface);
+}
+
+/* Cart Item Row */
+.luxury-cart-item {
+    padding: 0.85rem;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    margin-bottom: 0.75rem;
+    background: var(--bg-surface-elevated);
+    transition: border-color 0.2s ease;
+}
+
+.luxury-cart-item:hover {
+    border-color: var(--border-gold);
+}
+
+/* Modal Enhancements */
+.luxury-modal .modal-content {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 16px;
+    box-shadow: var(--shadow-luxury);
+}
+
+.luxury-modal .modal-header {
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 1.25rem 1.5rem;
+}
+
+.luxury-modal .modal-footer {
+    border-top: 1px solid var(--border-subtle);
+    padding: 1rem 1.5rem;
+}

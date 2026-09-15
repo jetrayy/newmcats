@@ -1,0 +1,6 @@
+{
+  "name": "MCATS",
+  "description": "Multi-category POS and inventory management system with sales, rentals, and day session tracking",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

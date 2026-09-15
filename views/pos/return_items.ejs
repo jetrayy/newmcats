@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCATS | Active Equipment Leases</title>
+    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
+    <!-- Instant theme apply — prevents flash -->
+    <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'light');</script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome 6 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Luxury Core CSS -->
+    <link rel="stylesheet" href="/css/luxury.css">
+    <style>
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--luxury-body-bg); min-height: 100vh; display: flex; flex-direction: column; }
+        .top-navbar {
+            background: var(--obsidian-sidebar);
+            border-bottom: 1px solid var(--obsidian-border);
+            padding: 1rem 1.5rem;
+        }
+        .rental-card {
+            background: var(--luxury-card-bg);
+            border: 1px solid var(--luxury-card-border);
+            border-radius: var(--radius-xl);
+            transition: all 0.26s ease;
+            text-decoration: none;
+            color: inherit;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+        }
+        .rental-card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(212, 175, 55, 0.45);
+            box-shadow: var(--shadow-glow);
+            color: inherit;
+        }
+        .rental-card-footer {
+            background: rgba(212, 175, 55, 0.08);
+            border-top: 1px solid rgba(212, 175, 55, 0.18);
+            color: var(--gold-primary);
+            font-weight: 700;
+            font-size: 0.82rem;
+            letter-spacing: 0.04em;
+            transition: all 0.2s ease;
+        }
+        .rental-card:hover .rental-card-footer {
+            background: var(--gold-primary);
+            color: #070a12;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="top-navbar d-flex justify-content-between align-items-center flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center justify-content-center rounded-circle" style="width: 42px; height: 42px; background: rgba(212, 175, 55, 0.15); border: 1px solid rgba(212, 175, 55, 0.3);">
+                <i class="fa-solid fa-boxes-packing" style="color: var(--gold-primary);"></i>
+            </div>
+            <div>
+                <h5 class="mb-0 fw-bold text-white" style="font-family: 'Outfit', sans-serif; letter-spacing: 0.04em;">Active Rentals Directory</h5>
+                <small class="text-secondary">Track live gear dispatch and process returns</small>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <button id="themeToggle" class="btn btn-sm btn-outline-secondary text-white rounded-pill px-3 shadow-sm border-secondary">
+                <i class="fa-solid fa-moon me-1"></i> Dark Mode
+            </button>
+            <a href="/views/pos/rent.php" class="btn btn-sm btn-luxury-gold rounded-pill px-3 fw-bold shadow-sm">
+                <i class="fa-solid fa-arrow-left me-1"></i> Back to POS
+            </a>
+        </div>
+    </div>
+
+    <div class="container-fluid py-4 flex-grow-1" style="max-width: 1400px; margin: 0 auto;">
+        
+        <!-- Filters -->
+        <div class="card p-3 p-md-4 mb-4 rounded-4" style="background: var(--luxury-card-bg); border: 1px solid var(--luxury-card-border); box-shadow: var(--shadow-sm);">
+            <form method="GET" action="/views/pos/return_items.php" class="row align-items-end g-3">
+                <div class="col-md-5">
+                    <label class="form-label fw-bold text-secondary small mb-1 text-uppercase" style="letter-spacing: 0.05em;">
+                        <i class="fa-solid fa-magnifying-glass me-1"></i> Client Search
+                    </label>
+                    <input type="text" name="search" class="form-control border-secondary-subtle" placeholder="Query by client name, NIC, or phone number..." value="<%= searchFilter || '' %>">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold text-secondary small mb-1 text-uppercase" style="letter-spacing: 0.05em;">
+                        <i class="fa-regular fa-calendar me-1"></i> Agreement Date
+                    </label>
+                    <input type="date" name="date" class="form-control border-secondary-subtle" value="<%= dateFilter !== 'all' ? dateFilter : '' %>">
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button type="submit" class="btn btn-luxury-gold flex-grow-1 fw-bold rounded-pill">
+                        <i class="fa-solid fa-filter me-1"></i> Filter Leases
+                    </button>
+                    <a href="/views/pos/return_items.php" class="btn btn-outline-secondary border-secondary-subtle rounded-pill px-3">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Rentals Grid -->
+        <div class="row g-4">
+            <% if (rentals && rentals.length > 0) { %>
+                <% rentals.forEach(function(rental) { 
+                    const tid = rental.bill_number;
+                    const cname = rental.c_name || "Walk-in Client";
+                    const cphone = rental.c_phone || "No Phone";
+                    const cnic = rental.customer_nic || "Unspecified";
+                    const d = new Date(rental.transaction_date);
+                    const dateFmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' • ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                %>
+                <div class="col-md-6 col-lg-4 col-xl-3">
+                    <a href="/views/pos/return_checkout.php?bill_id=<%= tid %>" class="rental-card h-100">
+                        <div class="p-3 border-bottom border-secondary-subtle d-flex justify-content-between align-items-start">
+                            <div>
+                                <div class="fw-bold fs-6 mb-1 text-truncate" title="<%= cname %>"><%= cname %></div>
+                                <div class="text-secondary small">
+                                    <i class="fa-regular fa-id-card me-1"></i><%= cnic %>
+                                </div>
+                                <div class="text-secondary small">
+                                    <i class="fa-solid fa-phone me-1"></i><%= cphone %>
+                                </div>
+                            </div>
+                            <span class="badge" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-family: 'Outfit', sans-serif; font-size: 0.85rem; padding: 0.35rem 0.6rem;">
+                                #<%= tid %>
+                            </span>
+                        </div>
+                        
+                        <div class="p-3 flex-grow-1">
+                            <div class="d-flex justify-content-between mb-2 small">
+                                <span class="text-secondary">Agreement Timestamp:</span>
+                                <span class="fw-semibold small"><%= dateFmt %></span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-3 small">
+                                <span class="text-secondary">Security Advance:</span>
+                                <span class="fw-bold text-success">Rs. <%= Number(rental.advance_paid || 0).toFixed(2) %></span>
+                            </div>
+                            
+                            <div class="p-2 rounded-3 small" style="background: rgba(0, 0, 0, 0.03); border: 1px solid var(--luxury-card-border);">
+                                <strong class="d-block mb-1 text-secondary" style="font-size: 0.76rem; text-uppercase; letter-spacing: 0.05em;">
+                                    <i class="fa-solid fa-camera-retro me-1" style="color: var(--gold-primary);"></i> Dispatched Equipment:
+                                </strong>
+                                <ul class="mb-0 ps-3 text-secondary" style="font-size: 0.8rem;">
+                                    <% if (rental.items && rental.items.length > 0) { %>
+                                        <% rental.items.slice(0, 3).forEach(function(it) { %>
+                                            <li><%= it.quantity %>× <%= it.item_name %></li>
+                                        <% }); %>
+                                        <% if (rental.items.length > 3) { %>
+                                            <li class='fst-italic'>+ <%= rental.items.length - 3 %> additional items...</li>
+                                        <% } %>
+                                    <% } else { %>
+                                        <li class='fst-italic'>Standard package</li>
+                                    <% } %>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <div class="rental-card-footer text-center p-3">
+                            Process Return & Settlement <i class="fa-solid fa-arrow-right ms-1"></i>
+                        </div>
+                    </a>
+                </div>
+                <% }); %>
+            <% } else { %>
+                <div class="col-12">
+                    <div class="text-center py-5 rounded-4 border border-secondary-subtle" style="background: var(--luxury-card-bg);">
+                        <i class="fa-solid fa-clipboard-check fs-1 d-block mb-3" style="color: var(--gold-primary); opacity: 0.4;"></i>
+                        <h4 class="fw-bold">No Active Leases Found</h4>
+                        <p class="text-secondary small mb-0">All equipment is returned, or no records matched your filter criteria.</p>
+                    </div>
+                </div>
+            <% } %>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const toggleBtn = document.getElementById('themeToggle');
+        const html = document.documentElement;
+
+        function updateToggleText() {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                toggleBtn.innerHTML = '<i class="fa-solid fa-sun me-1 text-warning"></i> Light Mode';
+            } else {
+                toggleBtn.innerHTML = '<i class="fa-solid fa-moon me-1"></i> Dark Mode';
+            }
+        }
+
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            updateToggleText();
+        }
+
+        toggleBtn.addEventListener('click', () => {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                html.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            updateToggleText();
+        });
+    </script>
+</body>
+</html>
