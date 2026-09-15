@@ -220,7 +220,7 @@
                 </div>
                 
                 <!-- Selected Items Box -->
-                <div class="overflow-auto rounded-4 p-2 mb-3" id="cartItemsContainer" style="background: rgba(0, 0, 0, 0.03); border: 1px dashed var(--luxury-card-border); min-height: 130px; max-height: 180px;">
+                <div class="overflow-auto rounded-4 p-2 mb-3" id="cartItemsContainer" style="background: rgba(0, 0, 0, 0.03); border: 1.5px solid var(--luxury-card-border); min-height: 170px; max-height: 280px; scrollbar-width: thin;">
                     <div class="text-center text-secondary py-4">
                         <i class="fa-regular fa-clipboard fs-3 d-block mb-1 opacity-25"></i>
                         <span class="small fw-semibold">No equipment added yet</span>
@@ -236,7 +236,7 @@
                 </div>
 
                 <!-- Customer Details & Rental Payment Form -->
-                <form method="POST" action="/views/pos/rent.php" id="rentForm" class="mt-auto">
+                <form method="POST" action="/views/pos/rent.php" id="rentForm" class="mt-2">
                     <!-- Customer Information Card -->
                     <div class="card border-0 rounded-4 mb-3 p-3" style="background: var(--luxury-card-bg); border: 1px solid var(--luxury-card-border) !important;">
                         <div class="d-flex justify-content-between align-items-center border-bottom border-secondary-subtle pb-2 mb-3">
@@ -395,6 +395,24 @@
             }
         }
 
+        function setDirectRentQty(id, inputElem) {
+            const val = parseInt(inputElem.value, 10);
+            if (!cart[id]) return;
+            if (isNaN(val) || val <= 0) {
+                delete cart[id];
+            } else {
+                cart[id].qty = val;
+            }
+            updateCartUI();
+        }
+
+        function removeRentItem(id) {
+            if (cart[id]) {
+                delete cart[id];
+                updateCartUI();
+            }
+        }
+
         function updateCartUI() {
             const container = document.getElementById('cartItemsContainer');
             const totalEl = document.getElementById('cartTotal');
@@ -421,9 +439,12 @@
                         <div class="text-secondary small">Rs. ${item.price.toFixed(2)}/day × ${item.qty}</div>
                     </div>
                     <div class="d-flex align-items-center gap-1">
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', -1)">-</button>
-                        <span class="fw-bold mx-1 text-center" style="min-width: 22px;">${item.qty}</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', 1)">+</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', -1)" title="Decrease quantity">-</button>
+                        <input type="number" class="form-control form-control-sm text-center fw-bold p-0 font-monospace rounded" style="width: 44px; height: 26px; font-size: 0.85rem;" min="1" value="${item.qty}" onchange="setDirectRentQty('${id}', this)" title="Direct quantity">
+                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', 1)" title="Increase quantity">+</button>
+                        <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 rounded ms-1" onclick="removeRentItem('${id}')" title="Remove item">
+                            <i class="fa-solid fa-trash-can" style="font-size: 0.75rem;"></i>
+                        </button>
                     </div>
                 `;
                 container.appendChild(itemDiv);

@@ -44,22 +44,94 @@
         /* Thermal Receipt Style (80mm) */
         .thermal-receipt {
             background: #ffffff;
-            width: 320px;
-            padding: 24px;
-            border-radius: 6px;
+            width: 340px;
+            max-width: 100%;
+            padding: 22px 18px;
+            border-radius: 8px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             font-family: 'JetBrains Mono', 'Courier New', monospace;
-            font-size: 13px;
+            font-size: 12.5px;
             color: #000;
             line-height: 1.4;
+            box-sizing: border-box;
         }
-        .thermal-receipt h2 { text-align: center; margin: 0 0 4px 0; font-size: 16px; text-transform: uppercase; font-weight: 800; }
-        .thermal-receipt .info { text-align: center; margin-bottom: 12px; border-bottom: 1px dashed #333; padding-bottom: 10px; font-size: 11px; }
-        .thermal-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-        .thermal-table th, .thermal-table td { text-align: left; padding: 5px 0; border-bottom: 1px dashed #ccc; color: #000; }
-        .thermal-table .right { text-align: right; }
-        .thermal-total { font-weight: 700; font-size: 13px; text-align: right; border-top: 2px dashed #000; padding-top: 10px; margin-top: 10px; line-height: 1.6; }
-        .thermal-footer { text-align: center; margin-top: 18px; font-size: 11px; border-top: 1px dashed #333; padding-top: 12px; line-height: 1.5; }
+        .thermal-receipt h2 { text-align: center; margin: 0 0 4px 0; font-size: 16px; text-transform: uppercase; font-weight: 800; letter-spacing: 0.02em; }
+        .thermal-receipt .info { text-align: center; margin-bottom: 12px; border-bottom: 1px dashed #000; padding-bottom: 10px; font-size: 11px; line-height: 1.5; }
+        
+        .thermal-table { width: 100%; border-collapse: collapse; margin-bottom: 8px; table-layout: fixed; }
+        .thermal-table th {
+            text-align: left;
+            padding: 6px 4px;
+            border-bottom: 1px dashed #000;
+            color: #000;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .thermal-table th.right, .thermal-table td.right { text-align: right; }
+        .thermal-table th.center, .thermal-table td.center { text-align: center; }
+
+        /* Two-row item formatting for 100% readable, non-colliding layout */
+        .thermal-table tr.item-name-row td {
+            padding: 7px 4px 2px 4px;
+            font-weight: 700;
+            font-size: 12px;
+            color: #000;
+            word-break: break-word;
+            line-height: 1.35;
+        }
+        .thermal-table tr.item-meta-row td {
+            padding: 1px 4px 7px 4px;
+            font-size: 11.5px;
+            color: #111;
+            border-bottom: 1px dotted #ccc;
+        }
+        .thermal-table tr.item-meta-row:last-child td {
+            border-bottom: none;
+        }
+
+        .thermal-totals-box {
+            border-top: 2px dashed #000;
+            padding-top: 8px;
+            margin-top: 8px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .thermal-totals-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 2px 2px;
+        }
+        .thermal-totals-row.grand-total {
+            font-size: 14px;
+            font-weight: 800;
+            border-top: 1px dashed #000;
+            border-bottom: 1px dashed #000;
+            padding: 6px 2px;
+            margin: 4px 0;
+        }
+        .thermal-totals-row.discount {
+            color: #b91c1c;
+            font-weight: 700;
+        }
+        .thermal-complimentary {
+            margin-top: 8px;
+            padding: 6px 8px;
+            background: #f4f4f5;
+            border-radius: 4px;
+            font-size: 11px;
+            line-height: 1.4;
+            border-left: 3px solid #000;
+        }
+        .thermal-footer {
+            text-align: center;
+            margin-top: 16px;
+            font-size: 11px;
+            border-top: 1px dashed #000;
+            padding-top: 12px;
+            line-height: 1.5;
+        }
 
         /* A4 Receipt Style */
         .a4-receipt {
@@ -145,29 +217,86 @@
                 <table class="thermal-table">
                     <thead>
                         <tr>
-                            <th>Item</th>
-                            <th class="right">Qty</th>
-                            <th class="right">Price</th>
-                            <th class="right">Amt</th>
+                            <th style="width: 32%;">Item</th>
+                            <th class="center" style="width: 18%;">Qty</th>
+                            <th class="right" style="width: 25%;">Price</th>
+                            <th class="right" style="width: 25%;">Amt</th>
                         </tr>
                     </thead>
                     <tbody>
-                        <% items.forEach(function(row) { %>
-                        <tr>
-                            <td><%= (row.item_name && row.item_name.length > 16) ? row.item_name.substring(0, 16) + '..' : row.item_name %></td>
-                            <td class="right"><%= row.quantity %></td>
-                            <td class="right"><%= Number(row.unit_price).toFixed(2) %></td>
-                            <td class="right"><%= (row.unit_price * row.quantity).toFixed(2) %></td>
+                        <% 
+                            let totalItemCount = items.length;
+                            let totalQtyCount = 0;
+                            let computedSubtotal = 0;
+                            items.forEach(function(row) { 
+                                const qty = Number(row.quantity) || 1;
+                                const price = Number(row.unit_price) || 0;
+                                const lineTotal = qty * price;
+                                totalQtyCount += qty;
+                                computedSubtotal += lineTotal;
+                        %>
+                        <tr class="item-name-row">
+                            <td colspan="4"><%= row.item_name %></td>
+                        </tr>
+                        <tr class="item-meta-row">
+                            <td style="color: #666; font-size: 10.5px;">#<%= row.item_id %></td>
+                            <td class="center"><%= qty %></td>
+                            <td class="right"><%= price.toFixed(2) %></td>
+                            <td class="right fw-bold"><%= lineTotal.toFixed(2) %></td>
                         </tr>
                         <% }); %>
                     </tbody>
                 </table>
                 
-                <div class="thermal-total">
-                    NET TOTAL : Rs. <%= Number(txn.total_lkr).toFixed(2) %><br>
-                    CASH PAID : Rs. <%= Number(txn.received_amount).toFixed(2) %><br>
-                    CHANGE    : Rs. <%= Number(txn.balance_amount).toFixed(2) %>
+                <% 
+                    const subtotal = Number(txn.subtotal_lkr !== undefined && txn.subtotal_lkr !== null ? txn.subtotal_lkr : (computedSubtotal || txn.total_lkr || 0));
+                    const discountAmt = Number(txn.discount_amount || 0);
+                    const discountType = txn.discount_type || 'none';
+                    const discountVal = Number(txn.discount_value || 0);
+                    const netTotal = Number(txn.total_lkr !== undefined && txn.total_lkr !== null ? txn.total_lkr : Math.max(0, subtotal - discountAmt));
+                    const cashPaid = Number(txn.received_amount || 0);
+                    const change = Number(txn.balance_amount !== undefined ? txn.balance_amount : (cashPaid - netTotal));
+                %>
+                
+                <div class="thermal-totals-box">
+                    <div class="thermal-totals-row" style="font-size: 11px; color: #555;">
+                        <span>TOTAL ITEMS</span>
+                        <span><%= totalQtyCount %> pcs (<%= totalItemCount %> lines)</span>
+                    </div>
+                    
+                    <% if (discountAmt > 0) { %>
+                    <div class="thermal-totals-row">
+                        <span>GROSS TOTAL</span>
+                        <span>Rs. <%= subtotal.toFixed(2) %></span>
+                    </div>
+                    <div class="thermal-totals-row discount">
+                        <span>DISCOUNT <%= discountType === 'percentage' ? '(' + discountVal + '%)' : '(FLAT)' %></span>
+                        <span>- Rs. <%= discountAmt.toFixed(2) %></span>
+                    </div>
+                    <% } %>
+                    
+                    <div class="thermal-totals-row grand-total">
+                        <span>NET TOTAL</span>
+                        <span>Rs. <%= netTotal.toFixed(2) %></span>
+                    </div>
+                    
+                    <div class="thermal-totals-row">
+                        <span>CASH PAID</span>
+                        <span>Rs. <%= cashPaid.toFixed(2) %></span>
+                    </div>
+                    
+                    <div class="thermal-totals-row" style="font-weight: 700;">
+                        <span>CHANGE / BALANCE</span>
+                        <span>Rs. <%= change.toFixed(2) %></span>
+                    </div>
                 </div>
+
+                <% if (txn.free_equipment) { %>
+                    <div class="thermal-complimentary">
+                        <strong>* Free Complimentary Item:</strong><br>
+                        <%= txn.free_equipment %>
+                    </div>
+                <% } %>
                 
                 <div class="thermal-footer">
                     Thank you for choosing Mahinda Constructions!<br>
@@ -188,7 +317,7 @@
                     Date: <%= dateFormatted %>
                 </div>
 
-                <div style="font-size: 11px; margin-bottom: 10px; border-bottom: 1px dashed #333; padding-bottom: 8px;">
+                <div style="font-size: 11px; margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 8px;">
                     <div><strong>Customer:</strong> <%= (typeof customer !== 'undefined' && customer && customer.full_name) ? customer.full_name : (txn.customer_nic || 'Walk-in Customer') %></div>
                     <div><strong>NIC:</strong> <%= txn.customer_nic || 'N/A' %></div>
                     <div><strong>Phone:</strong> <%= (typeof customer !== 'undefined' && customer && customer.phone_number) ? customer.phone_number : 'N/A' %></div>
@@ -197,28 +326,38 @@
                 <table class="thermal-table">
                     <thead>
                         <tr>
-                            <th>Item</th>
-                            <th class="right">Qty</th>
-                            <th class="right">Daily Rate</th>
+                            <th style="width: 40%;">Item</th>
+                            <th class="center" style="width: 25%;">Qty</th>
+                            <th class="right" style="width: 35%;">Daily Rate</th>
                         </tr>
                     </thead>
                     <tbody>
                         <% items.forEach(function(row) { %>
-                        <tr>
-                            <td><%= (row.item_name && row.item_name.length > 16) ? row.item_name.substring(0, 16) + '..' : row.item_name %></td>
-                            <td class="right"><%= row.quantity %></td>
-                            <td class="right"><%= Number(row.unit_price).toFixed(2) %></td>
+                        <tr class="item-name-row">
+                            <td colspan="3"><%= row.item_name %></td>
+                        </tr>
+                        <tr class="item-meta-row">
+                            <td style="color: #666; font-size: 10.5px;">#<%= row.item_id %></td>
+                            <td class="center"><%= row.quantity %></td>
+                            <td class="right fw-bold"><%= Number(row.unit_price).toFixed(2) %></td>
                         </tr>
                         <% }); %>
                     </tbody>
                 </table>
                 
-                <div class="thermal-total">
-                    ADVANCE PAID : Rs. <%= Number(txn.advance_paid || txn.received_amount || 0).toFixed(2) %>
-                    <% if (txn.free_equipment) { %>
-                        <br><small style="font-weight: normal; font-size: 11px;">Included: <%= txn.free_equipment %></small>
-                    <% } %>
+                <div class="thermal-totals-box">
+                    <div class="thermal-totals-row grand-total">
+                        <span>ADVANCE PAID</span>
+                        <span>Rs. <%= Number(txn.advance_paid || txn.received_amount || 0).toFixed(2) %></span>
+                    </div>
                 </div>
+                
+                <% if (txn.free_equipment) { %>
+                    <div class="thermal-complimentary">
+                        <strong>* Free Complimentary Item:</strong><br>
+                        <%= txn.free_equipment %>
+                    </div>
+                <% } %>
                 
                 <div class="thermal-footer">
                     <strong>*** INITIAL DISPATCH SLIP ***</strong><br>
@@ -230,10 +369,11 @@
             </div>
 
         <% } else { %>
-            <!-- A4 RECEIPT (POS Rental Agreement / Final Settlement) -->
+            <!-- A4 RECEIPT (POS Rental Agreement / Final Settlement / Sales Invoice) -->
             <% 
+                const isSelling = txn.type === 'selling';
                 const isReturned = txn.status === 'returned';
-                const clientName = (typeof customer !== 'undefined' && customer && customer.full_name) ? customer.full_name : (txn.customer_nic || 'Walk-in Customer');
+                const clientName = (typeof customer !== 'undefined' && customer && customer.full_name) ? customer.full_name : (txn.customer_nic || (isSelling ? 'Cash Customer (Over the Counter)' : 'Walk-in Customer'));
                 const clientPhone = (typeof customer !== 'undefined' && customer && customer.phone_number) ? customer.phone_number : '';
                 const clientAddress = (typeof customer !== 'undefined' && customer && customer.address) ? customer.address : '';
             %>
@@ -246,8 +386,8 @@
                         <p class="mb-0 text-dark small">Hotline: 072-2097483 | Support Desk: 081-2244550</p>
                     </div>
                     <div class="text-end">
-                        <span class="badge text-uppercase mb-1" style="background: <%= isReturned ? 'rgba(16, 185, 129, 0.15)' : 'rgba(212, 175, 55, 0.15)' %>; color: <%= isReturned ? '#065f46' : '#8c6d1f' %>; font-size: 0.75rem; letter-spacing: 0.1em; font-weight: 700;">
-                            <%= isReturned ? 'Final Lease Settlement & Return Invoice' : 'Equipment Lease Agreement' %>
+                        <span class="badge text-uppercase mb-1" style="background: <%= isSelling ? 'rgba(59, 130, 246, 0.15)' : (isReturned ? 'rgba(16, 185, 129, 0.15)' : 'rgba(212, 175, 55, 0.15)') %>; color: <%= isSelling ? '#1d4ed8' : (isReturned ? '#065f46' : '#8c6d1f') %>; font-size: 0.75rem; letter-spacing: 0.1em; font-weight: 700;">
+                            <%= isSelling ? 'Commercial Sales & Retail Invoice' : (isReturned ? 'Final Lease Settlement & Return Invoice' : 'Equipment Lease Agreement') %>
                         </span>
                         <h2 class="text-uppercase tracking-wide mb-0 fw-bold" style="letter-spacing: 2px; color: #0b1120;">Invoice</h2>
                         <p class="fs-5 fw-bold text-dark mb-0 font-monospace">#<%= String(billId).padStart(6, '0') %></p>
@@ -256,7 +396,7 @@
                 
                 <div class="row mb-4 text-dark">
                     <div class="col-7">
-                        <div class="fw-bold text-uppercase small text-secondary mb-1" style="font-size: 0.72rem; letter-spacing: 0.06em;">Lessee / Client Profile</div>
+                        <div class="fw-bold text-uppercase small text-secondary mb-1" style="font-size: 0.72rem; letter-spacing: 0.06em;"><%= isSelling ? 'Billed To / Customer Profile' : 'Lessee / Client Profile' %></div>
                         <div class="fs-6 fw-bold"><%= clientName %></div>
                         <div class="text-secondary small">
                             <% if (txn.customer_nic) { %>NIC: <strong><%= txn.customer_nic %></strong> &bull; <% } %>
@@ -268,7 +408,7 @@
                         <div class="mb-1"><span class="fw-bold text-secondary text-uppercase small me-2">Date & Time:</span> <span class="fw-semibold"><%= dateFormatted %></span></div>
                         <div>
                             <span class="fw-bold text-secondary text-uppercase small me-2">Status:</span>
-                            <span class="badge <%= isReturned ? 'bg-success' : 'bg-warning text-dark' %>"><%= isReturned ? 'Closed / Returned' : 'Active / Dispatched' %></span>
+                            <span class="badge <%= isSelling ? 'bg-primary' : (isReturned ? 'bg-success' : 'bg-warning text-dark') %>"><%= isSelling ? 'Completed / Paid' : (isReturned ? 'Closed / Returned' : 'Active / Dispatched') %></span>
                         </div>
                     </div>
                 </div>
@@ -276,28 +416,28 @@
                 <table class="table border-top mb-4">
                     <thead class="table-light text-dark">
                         <tr>
-                            <th class="py-3 border-bottom border-secondary border-2 small text-uppercase fw-bold">Equipment Description</th>
+                            <th class="py-3 border-bottom border-secondary border-2 small text-uppercase fw-bold">Equipment / Item Description</th>
                             <th class="py-3 text-center border-bottom border-secondary border-2 small text-uppercase fw-bold">Quantity</th>
-                            <th class="py-3 text-end border-bottom border-secondary border-2 small text-uppercase fw-bold">Daily Rate (LKR)</th>
-                            <% if (isReturned) { %>
+                            <th class="py-3 text-end border-bottom border-secondary border-2 small text-uppercase fw-bold">Unit Price (LKR)</th>
+                            <% if (!isSelling && isReturned) { %>
                                 <th class="py-3 text-center border-bottom border-secondary border-2 small text-uppercase fw-bold">Billed Days</th>
                             <% } %>
                             <th class="py-3 text-end border-bottom border-secondary border-2 small text-uppercase fw-bold">
-                                <%= isReturned ? 'Rental Charge (LKR)' : 'Rate / Day (LKR)' %>
+                                <%= isSelling ? 'Line Total (LKR)' : (isReturned ? 'Rental Charge (LKR)' : 'Rate / Day (LKR)') %>
                             </th>
                         </tr>
                     </thead>
                     <tbody class="text-dark">
                         <% items.forEach(function(row) { %>
                         <% 
-                            const days = (isReturned && row.billed_days) ? Number(row.billed_days) : 1;
-                            const lineTotal = isReturned ? (row.quantity * row.unit_price * days) : (row.quantity * row.unit_price);
+                            const days = (!isSelling && isReturned && row.billed_days) ? Number(row.billed_days) : 1;
+                            const lineTotal = (!isSelling && isReturned) ? (row.quantity * row.unit_price * days) : (row.quantity * row.unit_price);
                         %>
                         <tr>
                             <td class="py-3 fw-bold"><%= row.item_name %></td>
                             <td class="py-3 text-center"><%= row.quantity %></td>
                             <td class="py-3 text-end"><%= Number(row.unit_price).toFixed(2) %></td>
-                            <% if (isReturned) { %>
+                            <% if (!isSelling && isReturned) { %>
                                 <td class="py-3 text-center fw-bold"><%= days %> <%= days === 1 ? 'day' : 'days' %></td>
                             <% } %>
                             <td class="py-3 text-end fw-bold"><%= Number(lineTotal).toFixed(2) %></td>
@@ -310,13 +450,46 @@
                     <div class="col-7">
                         <% if (txn.free_equipment) { %>
                             <div class="p-3 rounded-3 border bg-light mb-3">
-                                <span class="fw-bold small text-secondary text-uppercase d-block mb-1">Complimentary Accessories Included:</span>
+                                <span class="fw-bold small text-secondary text-uppercase d-block mb-1">Complimentary Item Included:</span>
                                 <span class="small fw-semibold text-dark"><%= txn.free_equipment %></span>
                             </div>
                         <% } %>
                     </div>
                     <div class="col-5">
-                        <% if (isReturned) { %>
+                        <% if (isSelling) { %>
+                            <!-- Selling A4 Totals with Subtotal, Discount, Net Total, Change -->
+                            <%
+                                const a4Subtotal = Number(txn.subtotal_lkr !== undefined && txn.subtotal_lkr !== null ? txn.subtotal_lkr : txn.total_lkr);
+                                const a4DiscAmt = Number(txn.discount_amount || 0);
+                                const a4DiscType = txn.discount_type || 'none';
+                                const a4DiscVal = Number(txn.discount_value || 0);
+                                const a4Net = Number(txn.total_lkr || 0);
+                                const a4Paid = Number(txn.received_amount || 0);
+                                const a4Bal = Number(txn.balance_amount !== undefined ? txn.balance_amount : (a4Paid - a4Net));
+                            %>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold text-secondary text-uppercase small">Gross Subtotal:</span>
+                                <span class="fs-6 fw-bold text-dark">LKR <%= a4Subtotal.toFixed(2) %></span>
+                            </div>
+                            <% if (a4DiscAmt > 0) { %>
+                            <div class="d-flex justify-content-between mb-2 text-danger">
+                                <span class="fw-bold text-uppercase small">Discount <%= a4DiscType === 'percentage' ? '(' + a4DiscVal + '%)' : '(FLAT)' %>:</span>
+                                <span class="fs-6 fw-bold">- LKR <%= a4DiscAmt.toFixed(2) %></span>
+                            </div>
+                            <% } %>
+                            <div class="d-flex justify-content-between mb-2 pb-2 border-bottom">
+                                <span class="fw-bold text-secondary text-uppercase small">Net Payable Amount:</span>
+                                <span class="fs-5 fw-bold text-dark" style="font-family: 'Outfit', sans-serif;">LKR <%= a4Net.toFixed(2) %></span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <span class="fw-bold text-secondary text-uppercase small">Cash Tendered:</span>
+                                <span class="fs-6 fw-bold text-dark">LKR <%= a4Paid.toFixed(2) %></span>
+                            </div>
+                            <div class="d-flex justify-content-between pt-1">
+                                <span class="fw-bold text-secondary text-uppercase small">Change / Balance:</span>
+                                <span class="fs-6 fw-bold text-success">LKR <%= a4Bal.toFixed(2) %></span>
+                            </div>
+                        <% } else if (isReturned) { %>
                             <!-- Final Returned Settlement Summary -->
                             <% 
                                 const totalCharge = Number(txn.total_lkr || 0);
@@ -369,13 +542,20 @@
                     </div>
                 </div>
                 
-                <div class="p-4 rounded-3 border-start border-4 border-warning mb-5 mt-auto" style="background: #fdfaf3;">
-                    <h6 class="fw-bold mb-2 text-dark" style="font-size: 0.88rem;">Terms & Conditions of Equipment Hire:</h6>
+                <div class="p-4 rounded-3 border-start border-4 <%= isSelling ? 'border-primary' : 'border-warning' %> mb-5 mt-auto" style="background: <%= isSelling ? '#f8fafc' : '#fdfaf3' %>;">
+                    <h6 class="fw-bold mb-2 text-dark" style="font-size: 0.88rem;"><%= isSelling ? 'Terms of Sale & Warranty Policy:' : 'Terms & Conditions of Equipment Hire:' %></h6>
                     <ol class="mb-0 small text-secondary ps-3" style="font-size: 0.8rem; line-height: 1.5;">
-                        <li class="mb-1">All machinery and tools must be returned in full operational and clean condition.</li>
-                        <li class="mb-1">Calculated days run from dispatch timestamp to physical handover check at the return desk.</li>
-                        <li class="mb-1">Lessee bears sole financial and legal liability for broken parts, burnt motors, or misplaced accessories.</li>
-                        <li>Security advances are reconciled against actual operational days upon return inspection.</li>
+                        <% if (isSelling) { %>
+                            <li class="mb-1">Merchandise sold is subject to manufacturer standard warranty guidelines where applicable.</li>
+                            <li class="mb-1">Original cash sales invoice must be presented for any warranty evaluation or exchange inquiry.</li>
+                            <li class="mb-1">Electrical and power accessories damaged due to surge or improper handling are excluded.</li>
+                            <li>Goods once sold and delivered in good order are non-refundable.</li>
+                        <% } else { %>
+                            <li class="mb-1">All machinery and tools must be returned in full operational and clean condition.</li>
+                            <li class="mb-1">Calculated days run from dispatch timestamp to physical handover check at the return desk.</li>
+                            <li class="mb-1">Lessee bears sole financial and legal liability for broken parts, burnt motors, or misplaced accessories.</li>
+                            <li>Security advances are reconciled against actual operational days upon return inspection.</li>
+                        <% } %>
                     </ol>
                 </div>
                 

@@ -33,7 +33,7 @@ const authTokens = new Map(); // token -> { user_id, username, role, active_sess
 // Session configuration
 app.use(
   session({
-    secret: 'mcats-luxury-secret-key-2026',
+    secret: process.env.SESSION_SECRET || 'mcats-luxury-secret-key-2026',
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -47,7 +47,7 @@ app.use(
 
 // Token & Session synchronization helper
 function getAuthUser(req) {
-  const token = req.query.auth_token || req.headers['x-auth-token'] || (req.body && req.body.auth_token) || (req.session && req.session.auth_token);
+  const token = req.query.auth_token || req.query['amp;auth_token'] || req.headers['x-auth-token'] || (req.body && req.body.auth_token) || (req.session && req.session.auth_token);
   if (token && authTokens.has(token)) {
     const data = authTokens.get(token);
     if (data.expiresAt > Date.now()) {
@@ -85,10 +85,17 @@ app.use((req, res, next) => {
   const origRedirect = res.redirect.bind(res);
   res.redirect = function (url) {
     const auth = getAuthUser(req);
-    const token = (auth && auth.token) || req.query.auth_token || (req.session && req.session.auth_token);
+    const token = (auth && auth.token) || req.query.auth_token || (req.body && req.body.auth_token) || (req.session && req.session.auth_token);
     if (token && typeof url === 'string' && !url.includes('auth_token=') && !url.includes('/logout') && !url.includes('logout=1')) {
-      const sep = url.includes('?') ? '&' : '?';
-      url = url + sep + 'auth_token=' + encodeURIComponent(token);
+      const hashIdx = url.indexOf('#');
+      let hash = '';
+      let base = url;
+      if (hashIdx !== -1) {
+        hash = url.substring(hashIdx);
+        base = url.substring(0, hashIdx);
+      }
+      const sep = base.includes('?') ? '&' : '?';
+      url = base + sep + 'auth_token=' + encodeURIComponent(token) + hash;
     }
     return origRedirect(url);
   };
@@ -118,7 +125,7 @@ app.use((req, res, next) => {
 
   // Persist session changes back into authTokens store at the end of the response
   res.on('finish', () => {
-    const currentToken = (auth && auth.token) || req.query.auth_token || (req.session && req.session.auth_token);
+    const currentToken = (auth && auth.token) || req.query.auth_token || (req.body && req.body.auth_token) || (req.session && req.session.auth_token);
     if (currentToken && authTokens.has(currentToken) && req.session) {
       const entry = authTokens.get(currentToken);
       entry.active_session_id = req.session.active_session_id;
@@ -142,11 +149,23 @@ app.use((req, res, next) => {
   var token = ${JSON.stringify(token)};
   if (token) {
     try { localStorage.setItem('mcats_auth_token', token); } catch(e){}
+    function appendAuthToken(url, tok) {
+      if (!url || !tok || url.includes('auth_token=')) return url;
+      var hashIdx = url.indexOf('#');
+      var hash = '';
+      var base = url;
+      if (hashIdx !== -1) {
+        hash = url.substring(hashIdx);
+        base = url.substring(0, hashIdx);
+      }
+      var sep = base.includes('?') ? '&' : '?';
+      return base + sep + 'auth_token=' + encodeURIComponent(tok) + hash;
+    }
     function applyToken() {
-      document.querySelectorAll('a[href^="/views/"], a[href^="/index"], a[href^="/api/"], a[href^="/logout"]').forEach(function(a) {
-        if (a.href && !a.href.includes('auth_token=')) {
-          var sep = a.href.includes('?') ? '&' : '?';
-          a.href = a.href + sep + 'auth_token=' + encodeURIComponent(token);
+      document.querySelectorAll('a[href]').forEach(function(a) {
+        var href = a.getAttribute('href');
+        if (href && (href.startsWith('/views/') || href.startsWith('/index') || href.startsWith('/api/') || href.startsWith('/logout')) && !href.includes('auth_token=')) {
+          a.setAttribute('href', appendAuthToken(href, token));
         }
       });
       document.querySelectorAll('form').forEach(function(f) {
@@ -164,6 +183,29 @@ app.use((req, res, next) => {
     } else {
       applyToken();
     }
+    // Global click listener to guarantee all navigation carries auth_token before hash
+    document.addEventListener('click', function(e) {
+      var a = e.target.closest('a');
+      if (a) {
+        var href = a.getAttribute('href');
+        var activeToken = token || (function(){ try { return localStorage.getItem('mcats_auth_token'); }catch(e){ return null; } })();
+        if (activeToken && href && (href.startsWith('/views/') || href.startsWith('/index') || href.startsWith('/api/') || href.startsWith('/logout')) && !href.includes('auth_token=')) {
+          a.setAttribute('href', appendAuthToken(href, activeToken));
+        }
+      }
+    }, true);
+    // Global form submission listener to guarantee auth_token is attached
+    document.addEventListener('submit', function(e) {
+      var f = e.target;
+      var activeToken = token || (function(){ try { return localStorage.getItem('mcats_auth_token'); }catch(e){ return null; } })();
+      if (activeToken && !f.querySelector('input[name="auth_token"]')) {
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'auth_token';
+        inp.value = activeToken;
+        f.appendChild(inp);
+      }
+    }, true);
   }
 })();
 </script>`;
@@ -254,7 +296,7 @@ const handleLogin = (req, res) => {
       ? `/views/admin/sahome.php?auth_token=${token}`
       : `/views/admin/home.php?auth_token=${token}`;
 
-    if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.body.is_ajax) {
+    if (req.path.startsWith('/api/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || (req.body && req.body.is_ajax)) {
       return res.json({
         success: true,
         redirect: redirectUrl,
@@ -270,7 +312,7 @@ const handleLogin = (req, res) => {
     if (req.session) {
       req.session.login_error = errMsg;
     }
-    if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.body.is_ajax) {
+    if (req.path.startsWith('/api/') || req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || (req.body && req.body.is_ajax)) {
       return res.status(401).json({ success: false, error: errMsg });
     }
     return res.redirect('/views/index.php');
@@ -317,12 +359,16 @@ app.get('/logout', handleLogout);
 // Super Admin Dashboard & User Management
 // -------------------------------------------------------------
 const renderSaHome = (req, res) => {
+  let msg = req.session.req_msg || '';
+  delete req.session.req_msg;
+
   const totalSales = db.getTotalSales();
   const todaySales = db.getTodaySales();
   const users = db.getAllUsers();
   const pendingRequests = db.getChangeRequests({ status: 'pending' });
 
   res.render('admin/sahome', {
+    msg,
     totalSales,
     todaySales,
     users,
@@ -493,13 +539,8 @@ app.get('/views/admin/inventory_stats.php', requireSuperAdmin, (req, res) => {
 // -------------------------------------------------------------
 // Database Synchronization & Management Routes
 // -------------------------------------------------------------
-app.post('/api/db/reload', requireAuth, (req, res) => {
-  try {
-    db.loadFromSqlFile();
-    req.session.db_flash = { type: 'success', text: 'Database state successfully reloaded from db.sql!' };
-  } catch (err) {
-    req.session.db_flash = { type: 'danger', text: 'Failed to reload db.sql: ' + err.message };
-  }
+app.post('/api/db/reload', requireSuperAdmin, (req, res) => {
+  req.session.db_flash = { type: 'warning', text: 'Database live reload from file has been deactivated for database integrity and security.' };
   const referer = req.get('Referer') || '/views/admin/sahome.php';
   res.redirect(referer);
 });
@@ -572,6 +613,7 @@ app.get('/views/admin/end_session.php', requireAuth, (req, res) => {
 // Inventory Management
 // -------------------------------------------------------------
 app.get('/views/admin/inventory.php', requireAuth, (req, res) => {
+  const auth = getAuthUser(req);
   let msg = req.session.inv_msg || '';
   delete req.session.inv_msg;
 
@@ -588,17 +630,27 @@ app.get('/views/admin/inventory.php', requireAuth, (req, res) => {
   }
 
   let editData = null;
-  if (req.query.edit) {
-    editData = db.getItemById(req.query.edit);
+  const editId = req.query.edit || req.query['amp;edit'];
+  if (editId) {
+    editData = db.getItemById(editId);
   }
 
   // Check for authorized change request grant
   let activeGrant = null;
-  const grantId = req.query.grant_id || req.query.req_id;
+  const grantId = req.query.grant_id || req.query['amp;grant_id'] || req.query.req_id || req.query['amp;req_id'];
   if (grantId) {
     const g = db.getChangeRequestById(grantId);
     if (g && g.status === 'approved') {
       activeGrant = g;
+      if (!editData) {
+        editData = db.getItemById(g.item_id);
+      }
+    } else if (g && (g.status === 'cancelled' || g.status === 'rejected')) {
+      const typeLabel = g.type === 'quantity' ? 'Stock Quantity' : (g.type === 'daily_rate' ? 'Selling Price' : 'Cost Cipher');
+      msg = `<div class='alert alert-warning d-flex align-items-center gap-2 shadow-sm mb-3'>` +
+        `<i class='fa-solid fa-ban fs-5 text-danger'></i>` +
+        `<span>Request #REQ-${String(g.id).padStart(3, '0')} was <strong>cancelled by Super Admin</strong>. Item ${typeLabel} remains unchanged at original value.</span>` +
+        `</div>` + msg;
       if (!editData) {
         editData = db.getItemById(g.item_id);
       }
@@ -610,6 +662,7 @@ app.get('/views/admin/inventory.php', requireAuth, (req, res) => {
   res.render('admin/inventory', {
     msg,
     items,
+    isSa: Boolean(auth && auth.role === 'super_admin'),
     edit_data: editData,
     editData: editData,
     activeGrant: activeGrant,
@@ -624,7 +677,7 @@ app.get('/views/admin/inventory.php', requireAuth, (req, res) => {
 app.post('/views/admin/inventory.php', requireAuth, (req, res) => {
   const auth = getAuthUser(req);
   const isSa = auth && auth.role === 'super_admin';
-  const { item_id, item_name, category, price_per_unit, stock_quantity, status, existing_image, bought_price, item_image, item_image_data, grant_id } = req.body;
+  const { item_id, item_name, category, price_per_unit, stock_quantity, status, existing_image, bought_price, item_image, item_image_data, grant_id, change_reason } = req.body;
   
   // Image handling: save uploaded base64 image or keep chosen filename
   let assignedImage = item_image || existing_image || 'default.png';
@@ -664,6 +717,83 @@ app.post('/views/admin/inventory.php', requireAuth, (req, res) => {
   let finalBoughtPrice = (bought_price !== undefined && bought_price !== null && String(bought_price).trim() !== '') ? String(bought_price).trim() : null;
 
   const isUpdate = Boolean(item_id && Number(item_id) > 0);
+
+  // Security check: if non-super_admin edits restricted fields without approved grant
+  if (!isSa && isUpdate) {
+    const existing = db.getItemById(item_id);
+    if (existing) {
+      const origStock = Number(existing.stock_quantity);
+      const origPrice = Number(existing.price_per_unit);
+      const origCode = String(existing.bought_price || '').trim();
+
+      const stockDiff = finalStock !== origStock;
+      const priceDiff = Math.abs(finalPrice - origPrice) > 0.001;
+      const codeDiff = (String(finalBoughtPrice || '').trim() !== origCode);
+
+      const unauthorized = [];
+      if (stockDiff && (!activeGrant || activeGrant.type !== 'quantity')) {
+        unauthorized.push({ type: 'quantity', requestedValue: finalStock, current: origStock, name: 'Stock Quantity' });
+      }
+      if (priceDiff && (!activeGrant || activeGrant.type !== 'daily_rate')) {
+        unauthorized.push({ type: 'daily_rate', requestedValue: finalPrice, current: origPrice, name: 'Daily Rate' });
+      }
+      if (codeDiff && (!activeGrant || activeGrant.type !== 'cost_price')) {
+        unauthorized.push({ type: 'cost_price', requestedValue: finalBoughtPrice || '', current: origCode, name: 'Cost Price/Cipher' });
+      }
+
+      if (unauthorized.length > 0) {
+        // Revert unauthorized fields to existing baseline
+        if (stockDiff && (!activeGrant || activeGrant.type !== 'quantity')) finalStock = origStock;
+        if (priceDiff && (!activeGrant || activeGrant.type !== 'daily_rate')) finalPrice = origPrice;
+        if (codeDiff && (!activeGrant || activeGrant.type !== 'cost_price')) finalBoughtPrice = existing.bought_price;
+
+        // Auto-create categorized requests for the unauthorized edits
+        const autoCreated = [];
+        const reqReason = change_reason || 'Submitted via Item Edit Form';
+        for (const unauth of unauthorized) {
+          try {
+            const cr = db.createChangeRequest({
+              type: unauth.type,
+              itemId: item_id,
+              requestedValue: unauth.requestedValue,
+              reason: reqReason,
+              requestedBy: auth ? auth.username : 'admin'
+            });
+            autoCreated.push(cr);
+          } catch (e) {
+            console.error('[Inventory] Failed to auto-create request:', e);
+          }
+        }
+
+        // Save authorized non-restricted fields (name, category, status, image, and any granted field)
+        db.saveItem({
+          id: item_id,
+          name: item_name ? String(item_name).trim() : existing.item_name,
+          category,
+          price: finalPrice,
+          stock: finalStock,
+          status: status || existing.status,
+          image: assignedImage,
+          boughtPrice: finalBoughtPrice
+        });
+
+        if (activeGrant) {
+          db.completeChangeRequest(activeGrant.id, auth ? auth.username : 'admin');
+        }
+
+        req.session.inv_msg = `<div class='alert alert-warning d-flex align-items-center justify-content-between gap-3 shadow-sm'>` +
+          `<div class='d-flex align-items-center gap-2'>` +
+          `<i class='fa-solid fa-lock fs-5 text-warning'></i> ` +
+          `<span>Direct edit of restricted field(s) (${unauthorized.map(u => u.name).join(', ')}) requires Super Admin approval. <strong>${autoCreated.length} categorized request(s)</strong> have been forwarded to Super Admin. General details (Name/Image) saved.</span>` +
+          `</div>` +
+          `<a href='/views/admin/requests.php' class='btn btn-sm btn-warning text-nowrap'>View Requests</a>` +
+          `</div>`;
+
+        return res.redirect('/views/admin/inventory.php');
+      }
+    }
+  }
+
   const savedItem = db.saveItem({
     id: item_id,
     name: item_name ? String(item_name).trim() : 'Unnamed Item',
@@ -691,6 +821,66 @@ app.post('/views/admin/inventory.php', requireAuth, (req, res) => {
   successMsg += `</div>`;
   req.session.inv_msg = successMsg;
   res.redirect('/views/admin/inventory.php');
+});
+
+// API: Submit Multiple/Categorized Change Requests from single Request Button
+app.post('/api/requests/bulk', requireAuth, (req, res) => {
+  const auth = getAuthUser(req);
+  const { item_id, requests_json, reason, redirect_to } = req.body;
+  const username = auth ? auth.username : 'admin';
+
+  let requestsArray = [];
+  try {
+    requestsArray = typeof requests_json === 'string' ? JSON.parse(requests_json) : (requests_json || []);
+  } catch (e) {
+    requestsArray = [];
+  }
+
+  if (!Array.isArray(requestsArray) || requestsArray.length === 0) {
+    req.session.inv_msg = `<div class='alert alert-warning'>No valid changes detected to submit.</div>`;
+    return res.redirect(redirect_to || '/views/admin/inventory.php');
+  }
+
+  const created = [];
+  const errors = [];
+
+  for (const reqItem of requestsArray) {
+    try {
+      const newReq = db.createChangeRequest({
+        type: reqItem.type,
+        itemId: Number(item_id),
+        requestedValue: String(reqItem.requested_value).trim(),
+        reason: String(reason || '').trim(),
+        requestedBy: username
+      });
+      created.push(newReq);
+    } catch (err) {
+      errors.push(err.message);
+    }
+  }
+
+  if (created.length > 0) {
+    const item = db.getItemById(item_id);
+    const itemName = item ? item.item_name : 'Item';
+    const typeNames = created.map(c => {
+      if (c.type === 'quantity') return `Quantity (${c.requested_value})`;
+      if (c.type === 'daily_rate') return `Daily Rate (Rs. ${c.requested_value})`;
+      if (c.type === 'cost_price') return `Cost Code (${c.requested_value})`;
+      return c.type;
+    }).join(', ');
+
+    req.session.inv_msg = `<div class='alert alert-success d-flex align-items-center justify-content-between gap-3 shadow-sm'>` +
+      `<div class='d-flex align-items-center gap-2'>` +
+      `<i class='fa-solid fa-circle-check fs-5 text-success'></i> ` +
+      `<span>Submitted <strong>${created.length} categorized request(s)</strong> for <strong>"${itemName}"</strong> to Super Admin: ${typeNames}. Once approved, you can apply them.</span>` +
+      `</div>` +
+      `<a href='/views/admin/requests.php' class='btn btn-sm btn-outline-success text-nowrap'>View Requests</a>` +
+      `</div>`;
+  } else if (errors.length > 0) {
+    req.session.inv_msg = `<div class='alert alert-danger'>Failed to submit requests: ${errors.join(', ')}</div>`;
+  }
+
+  res.redirect(redirect_to || '/views/admin/inventory.php');
 });
 
 // -------------------------------------------------------------
@@ -761,16 +951,27 @@ app.post('/api/requests/approve', requireSuperAdmin, (req, res) => {
   res.redirect(redirect_to || '/views/admin/requests.php');
 });
 
-// API: Super Admin Reject Change Request
-app.post('/api/requests/reject', requireSuperAdmin, (req, res) => {
+// API: Super Admin Cancel / Reject Change Request
+app.post(['/api/requests/cancel', '/api/requests/reject'], requireSuperAdmin, (req, res) => {
   const auth = getAuthUser(req);
-  const { request_id, notes, redirect_to } = req.body;
+  const { request_id, reason, notes, redirect_to } = req.body;
+  const cancelReason = (reason || notes || 'Cancelled by Super Admin').trim();
 
   try {
-    const updated = db.rejectChangeRequest(request_id, auth.username, notes);
-    req.session.req_msg = `<div class='alert alert-warning'><i class='fa-solid fa-triangle-exclamation me-2'></i>Request #REQ-${String(updated.id).padStart(3, '0')} was rejected.</div>`;
+    const { req: updated, item } = db.cancelChangeRequest(request_id, auth.username, cancelReason);
+    const typeLabel = updated.type === 'quantity' ? 'Stock Quantity' : (updated.type === 'daily_rate' ? 'Daily Rate' : 'Cost Cipher');
+    const origVal = item
+      ? (updated.type === 'quantity' ? item.stock_quantity : (updated.type === 'daily_rate' ? `Rs. ${Number(item.price_per_unit).toFixed(2)}` : item.bought_price))
+      : updated.current_value;
+
+    req.session.req_msg = `<div class='alert alert-warning d-flex align-items-center justify-content-between gap-3 shadow-sm'>` +
+      `<div class='d-flex align-items-center gap-2'>` +
+      `<i class='fa-solid fa-ban fs-5 text-danger'></i> ` +
+      `<span>Request #REQ-${String(updated.id).padStart(3, '0')} for <strong>"${updated.item_name}"</strong> was <b>cancelled</b> by Super Admin. Item ${typeLabel} strictly keeps its unchanged value: <strong>${origVal}</strong>.</span>` +
+      `</div>` +
+      `</div>`;
   } catch (err) {
-    req.session.req_msg = `<div class='alert alert-danger'><b>Rejection Failed:</b> ${err.message}</div>`;
+    req.session.req_msg = `<div class='alert alert-danger'><b>Cancellation Failed:</b> ${err.message}</div>`;
   }
 
   res.redirect(redirect_to || '/views/admin/requests.php');
@@ -806,20 +1007,44 @@ app.post('/views/pos/sell.php', requireAuth, (req, res) => {
       return res.redirect('/views/pos/sell.php');
     }
 
-    let totalLkr = 0;
+    let subtotalLkr = 0;
     cartData.forEach(item => {
-      totalLkr += Number(item.price || 0) * Number(item.qty || 1);
+      subtotalLkr += Number(item.price || 0) * Number(item.qty || 1);
     });
 
-    const receivedAmount = req.body.received_amount ? parseFloat(req.body.received_amount) : totalLkr;
-    const balanceAmount = receivedAmount - totalLkr;
+    const rawDiscType = String(req.body.discount_type || 'none').toLowerCase();
+    const discountType = ['percentage', 'fixed'].includes(rawDiscType) ? rawDiscType : 'none';
+    let discountValue = parseFloat(req.body.discount_value) || 0;
+    if (discountValue < 0) discountValue = 0;
+
+    let discountAmount = 0;
+    if (discountType === 'percentage') {
+      if (discountValue > 100) discountValue = 100;
+      discountAmount = Math.round((subtotalLkr * (discountValue / 100)) * 100) / 100;
+    } else if (discountType === 'fixed') {
+      discountAmount = Math.min(subtotalLkr, discountValue);
+    } else {
+      discountValue = 0;
+      discountAmount = 0;
+    }
+
+    const netTotalLkr = Math.max(0, subtotalLkr - discountAmount);
+
+    const receivedAmount = (req.body.received_amount !== undefined && req.body.received_amount !== '')
+      ? parseFloat(req.body.received_amount)
+      : netTotalLkr;
+    const balanceAmount = receivedAmount - netTotalLkr;
     const freeEqText = (req.body.free_eq === 'yes') ? (String(req.body.free_eq_desc || '').trim() || 'Included Free Equipment') : null;
 
     const tx = db.createTransaction({
       sessionId: activeSession.id,
       customerNic: null,
       type: 'selling',
-      totalLkr,
+      subtotalLkr,
+      discountType,
+      discountValue,
+      discountAmount,
+      totalLkr: netTotalLkr,
       receivedAmount,
       balanceAmount,
       freeEquipment: freeEqText,
@@ -1051,8 +1276,34 @@ app.get('/views/pos/print_bill.php', requireAuth, (req, res) => {
 // -------------------------------------------------------------
 // Fallback 404 & Error Handler
 // -------------------------------------------------------------
-app.use((req, res) => {
+app.use((req, res, next) => {
   res.status(404).redirect('/views/index.php');
+});
+
+// Global error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled server error:', err);
+  if (req.xhr || (req.headers.accept && req.headers.accept.includes('application/json')) || req.path.startsWith('/api/')) {
+    return res.status(500).json({ error: 'Internal Server Error', message: err.message });
+  }
+  res.status(500).send(`
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <title>MCATS | Server Error</title>
+      <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+      <link rel="stylesheet" href="/css/luxury.css">
+    </head>
+    <body class="d-flex align-items-center justify-content-center min-vh-100 p-4" style="background: #070a12; color: #fff;">
+      <div class="card p-5 border-0 shadow-lg text-center" style="max-width: 480px; background: #0b1120; border: 1px solid rgba(255,255,255,0.1) !important; border-radius: 1rem;">
+        <h3 class="text-warning mb-3 fw-bold">System Notice</h3>
+        <p class="text-white-50 small mb-4">${err.message || 'An unexpected operational error occurred.'}</p>
+        <a href="/views/index.php" class="btn btn-luxury-gold fw-bold px-4 py-2 rounded-pill">Return to Dashboard</a>
+      </div>
+    </body>
+    </html>
+  `);
 });
 
 // Start Server

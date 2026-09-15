@@ -88,7 +88,34 @@
             transition: all 0.2s ease;
         }
         .cart-item-row:hover {
-            border-color: rgba(212, 175, 55, 0.35);
+            border-color: rgba(212, 175, 55, 0.45);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+        }
+        .cart-qty-btn {
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            font-size: 0.9rem;
+            font-weight: bold;
+            transition: all 0.15s ease;
+        }
+        .cart-qty-input {
+            width: 48px;
+            height: 32px;
+            font-size: 0.92rem;
+            font-weight: 700;
+            text-align: center;
+            padding: 0;
+        }
+        #cartItemsContainer::-webkit-scrollbar {
+            width: 6px;
+        }
+        #cartItemsContainer::-webkit-scrollbar-thumb {
+            background: rgba(212, 175, 55, 0.35);
+            border-radius: 4px;
         }
         @media (max-width: 991.98px) {
             .products-section, .cart-section { height: auto; position: static; overflow-y: visible; }
@@ -156,12 +183,15 @@
                             const img = item.item_image && item.item_image !== 'default.png' && item.item_image !== 'placeholder.jpg' ? '/img/' + item.item_image : '/img/logo.png';
                         %>
                         <div class="col-6 col-sm-4 col-md-3 col-xl-2">
-                            <div class="card h-100 product-card" data-id="<%= id %>" data-name="<%= name %>" data-price="<%= price %>">
+                            <div class="card h-100 product-card" data-id="<%= id %>" data-name="<%= name %>" data-price="<%= price %>" data-stock="<%= stock %>">
                                 <div class="product-img-wrap d-flex align-items-center justify-content-center">
                                     <img src="<%= img %>" loading="lazy" alt="Product" class="product-img object-fit-contain p-2">
-                                    <% if (stock <= 3) { %>
-                                        <span class="position-absolute top-0 start-0 m-2 badge bg-danger" style="font-size: 0.65rem;">Stock: <%= stock %></span>
-                                    <% } %>
+                                    <span class="position-absolute top-0 start-0 m-2 badge bg-dark bg-opacity-75 text-white" style="font-size: 0.65rem;">
+                                        Stock: <%= stock %>
+                                    </span>
+                                    <span class="position-absolute top-0 end-0 m-2 badge rounded-pill bg-warning text-dark fw-bold border border-warning in-cart-badge d-none" style="font-size: 0.65rem;">
+                                        <i class="fa-solid fa-basket-shopping me-1"></i><span class="badge-qty">0</span>
+                                    </span>
                                 </div>
                                 <div class="card-body p-2 d-flex flex-column justify-content-between text-center">
                                     <div>
@@ -170,9 +200,11 @@
                                             Rs. <%= price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
                                         </div>
                                     </div>
-                                    <button class="btn btn-luxury-gold btn-sm w-100 fw-bold rounded-pill" onclick="addToCart(this)">
-                                        <i class="fa-solid fa-plus me-1"></i> Add
-                                    </button>
+                                    <div class="product-card-actions" id="cardActions_<%= id %>">
+                                        <button class="btn btn-luxury-gold btn-sm w-100 fw-bold rounded-pill add-to-cart-btn" onclick="addToCart(this)">
+                                            <i class="fa-solid fa-plus me-1"></i> Add
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -190,46 +222,125 @@
             </div>
 
             <!-- Right Side: Executive Cart Register -->
-            <div class="col-lg-4 cart-section p-3 p-md-4 d-flex flex-column">
+            <div class="col-lg-4 cart-section p-3 p-md-4">
                 <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-secondary-subtle">
                     <div>
                         <span class="badge text-uppercase" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-size: 0.68rem; letter-spacing: 0.1em; font-weight: 700;">Checkout Register</span>
                         <h4 class="mb-0 fw-bold" style="font-family: 'Outfit', sans-serif;">Active Order</h4>
                     </div>
-                    <div class="position-relative d-inline-flex p-2 rounded-3" style="background: rgba(212, 175, 55, 0.1);">
-                        <i id="cartIcon" class="fa-solid fa-basket-shopping fs-5" style="color: var(--gold-primary);"></i>
-                        <span id="cartCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem; display:none;">0</span>
+                    <div class="d-flex align-items-center gap-2">
+                        <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2.5 py-1 small fw-semibold" onclick="clearBasket()" title="Clear entire basket">
+                            <i class="fa-solid fa-trash me-1"></i>Clear All
+                        </button>
+                        <div class="position-relative d-inline-flex p-2 rounded-3" style="background: rgba(212, 175, 55, 0.1);">
+                            <i id="cartIcon" class="fa-solid fa-basket-shopping fs-5" style="color: var(--gold-primary);"></i>
+                            <span id="cartCount" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="font-size: 0.65rem; display:none;">0</span>
+                        </div>
                     </div>
                 </div>
                 
-                <!-- Cart Scrollable List -->
-                <div class="flex-grow-1 overflow-auto rounded-4 p-2 mb-3" style="background: rgba(0, 0, 0, 0.03); border: 1px dashed var(--luxury-card-border); max-height: calc(100vh - 440px);" id="cartItemsContainer">
-                    <div class="text-center text-secondary py-5">
-                        <i class="fa-solid fa-basket-shopping fs-1 d-block mb-2 opacity-25"></i>
-                        <span class="small fw-semibold">Order basket is empty</span>
+                <!-- Added Items Section Header & List -->
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2 px-1">
+                        <span class="fw-bold small text-uppercase" style="letter-spacing: 0.05em; color: var(--gold-primary);">
+                            <i class="fa-solid fa-list-check me-1"></i> Added Items (<span id="cartItemKindsCount">0</span>)
+                        </span>
+                        <span class="badge bg-secondary-subtle text-secondary small font-monospace" id="cartTotalUnitsCount">0 items</span>
+                    </div>
+                    <!-- Cart Scrollable List: Guaranteed prominent height, no squashing -->
+                    <div class="overflow-y-auto rounded-4 p-2" style="min-height: 200px; max-height: 360px; background: rgba(0, 0, 0, 0.04); border: 1.5px solid var(--luxury-card-border); scrollbar-width: thin;" id="cartItemsContainer">
+                        <div class="text-center text-secondary py-5">
+                            <i class="fa-solid fa-basket-shopping fs-1 d-block mb-2 opacity-25"></i>
+                            <span class="small fw-semibold">Order basket is empty</span>
+                            <div class="small opacity-50 mt-1">Click "+ Add" on items to build order</div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Live Subtotal -->
-                <div class="p-3 rounded-4 mb-3" style="background: rgba(212, 175, 55, 0.06); border: 1px solid rgba(212, 175, 55, 0.2);">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="fw-bold text-secondary text-uppercase small" style="letter-spacing: 0.05em;">Total Amount</span>
+                <!-- Live Subtotal & Discount Sector -->
+                <div class="card border-0 rounded-4 mb-3 p-3" style="background: var(--luxury-card-bg); border: 1px solid var(--luxury-card-border) !important;">
+                    <!-- Discount Sector -->
+                    <div class="mb-3 pb-3 border-bottom border-secondary-subtle">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold small text-secondary text-uppercase" style="letter-spacing: 0.05em;">
+                                <i class="fa-solid fa-tags me-1" style="color: var(--gold-primary);"></i> Discount Sector
+                            </span>
+                            <span id="discountBadge" class="badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-2 py-1 small">No Discount</span>
+                        </div>
+                        
+                        <!-- Segmented Switch: Percentage vs Fixed Amount -->
+                        <div class="btn-group w-100 mb-2" role="group" aria-label="Discount Mode">
+                            <button type="button" class="btn btn-sm btn-outline-warning active fw-semibold" id="btnDiscPercent" onclick="setDiscountType('percentage')">
+                                <i class="fa-solid fa-percent me-1"></i> Percentage (%)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-warning fw-semibold" id="btnDiscAmount" onclick="setDiscountType('fixed')">
+                                <i class="fa-solid fa-money-bill me-1"></i> Flat Amount (Rs.)
+                            </button>
+                        </div>
+
+                        <!-- Numeric Input with Symbol and Reset -->
+                        <div class="input-group mb-2">
+                            <span class="input-group-text bg-transparent border-secondary-subtle fw-bold" id="discInputSymbol" style="color: var(--gold-primary);">%</span>
+                            <input type="number" id="discountInput" class="form-control border-secondary-subtle fw-bold" placeholder="0" min="0" step="any" oninput="applyDiscountChange()">
+                            <button class="btn btn-outline-secondary" type="button" onclick="clearDiscount()" title="Clear Discount">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <!-- Fast Preset Buttons -->
+                        <div class="d-flex flex-wrap gap-1" id="discountPresetsContainer">
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="applyPreset(5)">5%</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="applyPreset(10)">10%</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="applyPreset(15)">15%</button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="applyPreset(20)">20%</button>
+                            <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 small rounded-pill" onclick="clearDiscount()">Reset</button>
+                        </div>
+                    </div>
+
+                    <!-- Financial Summary Breakdown -->
+                    <div class="d-flex justify-content-between align-items-center mb-1 text-secondary small">
+                        <span>Gross Subtotal:</span>
+                        <span id="grossSubtotal" class="fw-semibold font-monospace">Rs. 0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-2 text-danger small" id="discountSummaryRow" style="display: none !important;">
+                        <span class="fw-bold"><i class="fa-solid fa-tag me-1"></i> Discount Applied:</span>
+                        <span id="discountSavings" class="fw-bold font-monospace">- Rs. 0.00</span>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top border-secondary-subtle">
+                        <span class="fw-bold text-secondary text-uppercase small" style="letter-spacing: 0.05em;">Net Total Amount</span>
                         <span class="fs-4 fw-bold" id="cartTotal" style="color: var(--gold-primary); font-family: 'Outfit', sans-serif;">Rs. 0.00</span>
                     </div>
                 </div>
 
                 <!-- Payment Form -->
-                <form method="POST" action="/views/pos/sell.php" id="checkoutForm" class="mt-auto">
+                <form method="POST" action="/views/pos/sell.php" id="checkoutForm" class="mt-2">
+                    <!-- Hidden checkout attributes -->
+                    <input type="hidden" name="cart_data" id="cartDataInput">
+                    <input type="hidden" name="discount_type" id="discountTypeInput" value="none">
+                    <input type="hidden" name="discount_value" id="discountValueInput" value="0">
+                    <input type="hidden" name="discount_amount" id="discountAmountInput" value="0">
+
                     <div class="card border-0 rounded-4 mb-3 p-3" style="background: var(--luxury-card-bg); border: 1px solid var(--luxury-card-border) !important;">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold small text-secondary text-uppercase mb-1" style="letter-spacing: 0.05em;">Cash Tendered (LKR)</label>
+                        <div class="mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label fw-bold small text-secondary text-uppercase mb-0" style="letter-spacing: 0.05em;">Cash Tendered (LKR)</label>
+                                <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none fw-bold" style="color: var(--gold-primary); font-size: 0.78rem;" onclick="setExactTender()">
+                                    <i class="fa-solid fa-bolt me-1"></i>Exact Net
+                                </button>
+                            </div>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent border-secondary-subtle fw-bold" style="color: var(--gold-primary);">Rs.</span>
                                 <input type="number" id="cashReceived" name="received_amount" min="0" step="0.01" class="form-control border-secondary-subtle fw-bold fs-5" placeholder="0.00" oninput="calculateBalance()">
                             </div>
+                            <!-- Quick Cash Presets -->
+                            <div class="d-flex gap-1 mt-2">
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="addCashPreset(500)">+500</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="addCashPreset(1000)">+1,000</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="addCashPreset(5000)">+5,000</button>
+                            </div>
                         </div>
                         
-                        <div class="d-flex justify-content-between align-items-center p-2 rounded-3 mb-2" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25);">
+                        <div class="d-flex justify-content-between align-items-center p-2 rounded-3 mb-2 mt-2" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25);">
                             <span class="small fw-bold text-success">Change / Balance:</span>
                             <span id="cashBalance" class="fw-bold fs-6 text-success">Rs. 0.00</span>
                         </div>
@@ -241,9 +352,8 @@
                         <input type="text" name="free_eq_desc" id="freeEqDesc" class="form-control form-control-sm mt-2 border-secondary-subtle" placeholder="Description of complimentary item..." style="display:none;">
                     </div>
 
-                    <input type="hidden" name="cart_data" id="cartDataInput">
                     <button type="submit" name="checkout" class="btn btn-luxury-gold btn-lg w-100 fw-bold shadow rounded-pill py-3 d-flex align-items-center justify-content-center gap-2" id="checkoutBtn" disabled>
-                        <i class="fa-solid fa-check-double"></i> Complete Sale & Print
+                        <i class="fa-solid fa-check-double"></i> Complete Sale & Print Bill
                     </button>
                 </form>
             </div>
@@ -299,18 +409,32 @@
         }
 
         let cart = {};
+        let currentDiscountType = 'percentage'; // 'percentage' or 'fixed'
+        let currentDiscountValue = 0;
+        let grossSubtotal = 0;
+        let currentDiscountAmount = 0;
+        let netTotal = 0;
 
         function addToCart(btn) {
             const card = btn.closest('.product-card');
             const id = card.getAttribute('data-id');
             const name = card.getAttribute('data-name');
-            const price = parseFloat(card.getAttribute('data-price'));
+            const price = parseFloat(card.getAttribute('data-price')) || 0;
+            const stock = parseInt(card.getAttribute('data-stock'), 10) || 9999;
             const img = card.querySelector('.product-img');
 
             if (cart[id]) {
+                if (cart[id].qty + 1 > stock) {
+                    alert(`Cannot add more. Available stock for "${name}" is ${stock}.`);
+                    return;
+                }
                 cart[id].qty += 1;
             } else {
-                cart[id] = { name: name, price: price, qty: 1, id: id };
+                if (stock <= 0) {
+                    alert(`"${name}" is out of stock.`);
+                    return;
+                }
+                cart[id] = { name: name, price: price, qty: 1, id: id, maxStock: stock };
             }
             updateCartUI();
             flyToCart(img);
@@ -318,70 +442,316 @@
 
         function changeQty(id, change) {
             if (cart[id]) {
-                cart[id].qty += change;
-                if (cart[id].qty <= 0) {
+                const targetQty = cart[id].qty + change;
+                const maxStock = cart[id].maxStock || 9999;
+                if (targetQty > maxStock) {
+                    alert(`Maximum available stock for "${cart[id].name}" is ${maxStock}.`);
+                    return;
+                }
+                if (targetQty <= 0) {
                     delete cart[id];
+                } else {
+                    cart[id].qty = targetQty;
                 }
                 updateCartUI();
             }
         }
 
+        function setDirectQty(id, inputElem) {
+            const val = parseInt(inputElem.value, 10);
+            if (!cart[id]) return;
+
+            if (isNaN(val) || val <= 0) {
+                delete cart[id];
+                updateCartUI();
+                return;
+            }
+
+            const maxStock = cart[id].maxStock || 9999;
+            if (val > maxStock) {
+                alert(`Maximum available stock for "${cart[id].name}" is ${maxStock}.`);
+                cart[id].qty = maxStock;
+            } else {
+                cart[id].qty = val;
+            }
+            updateCartUI();
+        }
+
+        function removeItem(id) {
+            if (cart[id]) {
+                delete cart[id];
+                updateCartUI();
+            }
+        }
+
+        function clearBasket() {
+            if (Object.keys(cart).length === 0) return;
+            cart = {};
+            clearDiscount();
+            updateCartUI();
+        }
+
+        function setDiscountType(type) {
+            currentDiscountType = type;
+            const btnPercent = document.getElementById('btnDiscPercent');
+            const btnAmount = document.getElementById('btnDiscAmount');
+            const symbol = document.getElementById('discInputSymbol');
+            const input = document.getElementById('discountInput');
+
+            if (type === 'percentage') {
+                btnPercent.classList.add('active');
+                btnAmount.classList.remove('active');
+                symbol.innerText = '%';
+                input.placeholder = 'e.g. 10';
+                input.max = '100';
+            } else {
+                btnAmount.classList.add('active');
+                btnPercent.classList.remove('active');
+                symbol.innerText = 'Rs.';
+                input.placeholder = 'e.g. 500';
+                input.removeAttribute('max');
+            }
+            renderDiscountPresets();
+            applyDiscountChange();
+        }
+
+        function renderDiscountPresets() {
+            const container = document.getElementById('discountPresetsContainer');
+            if (!container) return;
+            if (currentDiscountType === 'percentage') {
+                const presets = [5, 10, 15, 20];
+                container.innerHTML = presets.map(p => `
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="applyPreset(${p})">${p}%</button>
+                `).join('') + `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 small rounded-pill" onclick="clearDiscount()">Reset</button>`;
+            } else {
+                const presets = [100, 250, 500, 1000];
+                container.innerHTML = presets.map(p => `
+                    <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="applyPreset(${p})">Rs. ${p}</button>
+                `).join('') + `<button type="button" class="btn btn-sm btn-outline-danger py-0 px-2 small rounded-pill" onclick="clearDiscount()">Reset</button>`;
+            }
+        }
+
+        function applyPreset(val) {
+            const input = document.getElementById('discountInput');
+            input.value = val;
+            applyDiscountChange();
+        }
+
+        function clearDiscount() {
+            const input = document.getElementById('discountInput');
+            if (input) input.value = '';
+            currentDiscountValue = 0;
+            applyDiscountChange();
+        }
+
+        function applyDiscountChange() {
+            const input = document.getElementById('discountInput');
+            let val = parseFloat(input ? input.value : 0) || 0;
+            if (val < 0) val = 0;
+
+            if (currentDiscountType === 'percentage') {
+                if (val > 100) {
+                    val = 100;
+                    if (input) input.value = 100;
+                }
+                currentDiscountValue = val;
+                currentDiscountAmount = Math.round((grossSubtotal * (val / 100)) * 100) / 100;
+            } else {
+                if (val > grossSubtotal) {
+                    val = grossSubtotal;
+                }
+                currentDiscountValue = val;
+                currentDiscountAmount = val;
+            }
+
+            netTotal = Math.max(0, grossSubtotal - currentDiscountAmount);
+            updateTotalsDisplay();
+        }
+
+        function updateTotalsDisplay() {
+            const grossEl = document.getElementById('grossSubtotal');
+            const totalEl = document.getElementById('cartTotal');
+            const discRow = document.getElementById('discountSummaryRow');
+            const discSavingsEl = document.getElementById('discountSavings');
+            const discBadge = document.getElementById('discountBadge');
+
+            const typeInput = document.getElementById('discountTypeInput');
+            const valInput = document.getElementById('discountValueInput');
+            const amtInput = document.getElementById('discountAmountInput');
+
+            if (grossEl) grossEl.innerText = 'Rs. ' + grossSubtotal.toFixed(2);
+            if (totalEl) totalEl.innerText = 'Rs. ' + netTotal.toFixed(2);
+
+            if (currentDiscountAmount > 0) {
+                if (discRow) discRow.style.setProperty('display', 'flex', 'important');
+                if (discSavingsEl) {
+                    const label = currentDiscountType === 'percentage' ? ` (${currentDiscountValue}%)` : '';
+                    discSavingsEl.innerText = '- Rs. ' + currentDiscountAmount.toFixed(2) + label;
+                }
+                if (discBadge) {
+                    discBadge.className = 'badge bg-danger text-white rounded-pill px-2 py-1 small';
+                    discBadge.innerText = currentDiscountType === 'percentage' ? `${currentDiscountValue}% Off` : `Rs. ${currentDiscountValue.toFixed(2)} Off`;
+                }
+                if (typeInput) typeInput.value = currentDiscountType;
+                if (valInput) valInput.value = currentDiscountValue;
+                if (amtInput) amtInput.value = currentDiscountAmount;
+            } else {
+                if (discRow) discRow.style.setProperty('display', 'none', 'important');
+                if (discBadge) {
+                    discBadge.className = 'badge bg-secondary-subtle text-secondary-emphasis rounded-pill px-2 py-1 small';
+                    discBadge.innerText = 'No Discount';
+                }
+                if (typeInput) typeInput.value = 'none';
+                if (valInput) valInput.value = '0';
+                if (amtInput) amtInput.value = '0';
+            }
+
+            calculateBalance();
+        }
+
         function updateCartUI() {
             const container = document.getElementById('cartItemsContainer');
-            const totalEl = document.getElementById('cartTotal');
             const cartDataInput = document.getElementById('cartDataInput');
             const checkoutBtn = document.getElementById('checkoutBtn');
             const cartCountBadge = document.getElementById('cartCount');
+            const kindsCountEl = document.getElementById('cartItemKindsCount');
+            const totalUnitsEl = document.getElementById('cartTotalUnitsCount');
 
             container.innerHTML = '';
-            let total = 0;
+            grossSubtotal = 0;
             let totalItems = 0;
+            let itemKindsCount = 0;
             let cartArray = [];
 
             for (const id in cart) {
                 const item = cart[id];
-                total += item.price * item.qty;
+                const lineTotal = item.price * item.qty;
+                grossSubtotal += lineTotal;
                 totalItems += item.qty;
+                itemKindsCount += 1;
                 cartArray.push(item);
 
                 const itemDiv = document.createElement('div');
-                itemDiv.className = 'cart-item-row d-flex justify-content-between align-items-center p-2 mb-2 shadow-sm';
+                itemDiv.className = 'cart-item-row p-3 mb-2 rounded-3 shadow-sm border border-secondary-subtle position-relative';
+                itemDiv.style.background = 'var(--luxury-card-bg)';
                 itemDiv.innerHTML = `
-                    <div class="flex-grow-1 overflow-hidden me-2">
-                        <div class="fw-bold text-truncate small">${item.name}</div>
-                        <div class="text-secondary small">Rs. ${item.price.toFixed(2)} × ${item.qty}</div>
+                    <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                        <div class="flex-grow-1 pe-2">
+                            <div class="fw-bold mb-1 text-break" style="font-size: 0.92rem; line-height: 1.35;">${item.name}</div>
+                            <div class="small text-secondary font-monospace">
+                                Unit: <span class="fw-semibold">Rs. ${item.price.toFixed(2)}</span>
+                                ${item.maxStock && item.maxStock < 9999 ? ` &bull; <span class="badge bg-secondary-subtle text-secondary" style="font-size: 0.65rem;">Stock: ${item.maxStock}</span>` : ''}
+                            </div>
+                        </div>
+                        <div class="text-end">
+                            <div class="text-secondary small text-uppercase" style="font-size: 0.66rem; font-weight: 700; letter-spacing: 0.05em;">Subtotal</div>
+                            <div class="fw-bold font-monospace fs-6" style="color: var(--gold-primary); white-space: nowrap;">
+                                Rs. ${lineTotal.toFixed(2)}
+                            </div>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center gap-1">
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', -1)">-</button>
-                        <span class="fw-bold mx-1 text-center" style="min-width: 22px;">${item.qty}</span>
-                        <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 fw-bold rounded" onclick="changeQty('${id}', 1)">+</button>
+                    <div class="d-flex justify-content-between align-items-center pt-2 border-top border-secondary-subtle">
+                        <div class="d-flex align-items-center gap-1">
+                            <span class="small text-secondary fw-semibold me-1">Qty:</span>
+                            <button type="button" class="btn btn-sm btn-outline-secondary cart-qty-btn rounded-circle fw-bold" onclick="changeQty('${id}', -1)" title="Decrease quantity">-</button>
+                            <input type="number" class="form-control form-control-sm cart-qty-input fw-bold font-monospace rounded text-center" min="1" max="${item.maxStock || 9999}" value="${item.qty}" onchange="setDirectQty('${id}', this)" title="Direct quantity edit">
+                            <button type="button" class="btn btn-sm btn-outline-warning cart-qty-btn rounded-circle fw-bold" onclick="changeQty('${id}', 1)" title="Increase quantity">+</button>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-sm btn-outline-danger px-2.5 py-1 rounded-pill fw-semibold d-inline-flex align-items-center gap-1" onclick="removeItem('${id}')" title="Delete this item from order">
+                                <i class="fa-solid fa-trash-can" style="font-size: 0.75rem;"></i>
+                                <span style="font-size: 0.78rem;">Delete</span>
+                            </button>
+                        </div>
                     </div>
                 `;
                 container.appendChild(itemDiv);
             }
 
+            if (kindsCountEl) kindsCountEl.innerText = itemKindsCount;
+            if (totalUnitsEl) totalUnitsEl.innerText = `${totalItems} unit${totalItems === 1 ? '' : 's'}`;
+
             if (cartArray.length === 0) {
-                container.innerHTML = '<div class="text-center text-secondary py-5"><i class="fa-solid fa-basket-shopping fs-1 d-block mb-2 opacity-25"></i><span class="small fw-semibold">Order basket is empty</span></div>';
+                container.innerHTML = `
+                    <div class="text-center text-secondary py-5">
+                        <i class="fa-solid fa-basket-shopping fs-1 d-block mb-2 opacity-25"></i>
+                        <span class="small fw-semibold">Order basket is empty</span>
+                        <div class="small opacity-50 mt-1">Click "+ Add" on items to build order</div>
+                    </div>
+                `;
                 cartCountBadge.style.display = 'none';
             } else {
                 cartCountBadge.style.display = 'inline-block';
                 cartCountBadge.innerText = totalItems;
             }
 
-            totalEl.innerText = 'Rs. ' + total.toFixed(2);
+            // Sync indicators and quick action buttons on catalog product cards
+            document.querySelectorAll('.product-card').forEach(card => {
+                const cardId = card.getAttribute('data-id');
+                const badge = card.querySelector('.in-cart-badge');
+                const qtySpan = card.querySelector('.badge-qty');
+                const actionsDiv = document.getElementById('cardActions_' + cardId);
+
+                if (cart[cardId]) {
+                    if (badge) {
+                        badge.classList.remove('d-none');
+                        if (qtySpan) qtySpan.innerText = cart[cardId].qty;
+                    }
+                    if (actionsDiv) {
+                        actionsDiv.innerHTML = `
+                            <div class="d-flex align-items-center justify-content-between gap-1 bg-warning bg-opacity-10 p-1 rounded-pill border border-warning border-opacity-50">
+                                <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle p-0" style="width: 28px; height: 28px;" onclick="event.stopPropagation(); changeQty('${cardId}', -1)" title="Decrease quantity">-</button>
+                                <span class="fw-bold small font-monospace text-warning px-1">${cart[cardId].qty} in cart</span>
+                                <button type="button" class="btn btn-sm btn-warning rounded-circle p-0 fw-bold text-dark" style="width: 28px; height: 28px;" onclick="event.stopPropagation(); changeQty('${cardId}', 1)" title="Increase quantity">+</button>
+                            </div>
+                        `;
+                    }
+                } else {
+                    if (badge) {
+                        badge.classList.add('d-none');
+                        if (qtySpan) qtySpan.innerText = '0';
+                    }
+                    if (actionsDiv) {
+                        actionsDiv.innerHTML = `
+                            <button class="btn btn-luxury-gold btn-sm w-100 fw-bold rounded-pill add-to-cart-btn" onclick="addToCart(this)">
+                                <i class="fa-solid fa-plus me-1"></i> Add
+                            </button>
+                        `;
+                    }
+                }
+            });
+
             cartDataInput.value = JSON.stringify(cartArray);
             checkoutBtn.disabled = cartArray.length === 0;
-            
-            calculateBalance();
+
+            applyDiscountChange();
+        }
+
+        function setExactTender() {
+            const cashInput = document.getElementById('cashReceived');
+            if (cashInput) {
+                cashInput.value = netTotal > 0 ? netTotal.toFixed(2) : '';
+                calculateBalance();
+            }
+        }
+
+        function addCashPreset(amt) {
+            const cashInput = document.getElementById('cashReceived');
+            if (cashInput) {
+                const current = parseFloat(cashInput.value) || 0;
+                cashInput.value = (current + amt).toFixed(2);
+                calculateBalance();
+            }
         }
 
         function calculateBalance() {
-            const rawTotalStr = document.getElementById('cartTotal').innerText.replace('Rs. ', '');
-            const total = parseFloat(rawTotalStr) || 0;
-            const received = parseFloat(document.getElementById('cashReceived').value) || 0;
-            const balance = received - total;
+            const receivedInput = document.getElementById('cashReceived');
+            const received = parseFloat(receivedInput ? receivedInput.value : 0) || 0;
+            const balance = received - netTotal;
             
             const balEl = document.getElementById('cashBalance');
+            if (!balEl) return;
+
             if (received > 0 && balance >= 0) {
                 balEl.innerText = 'Rs. ' + balance.toFixed(2);
                 balEl.className = 'fw-bold fs-6 text-success';

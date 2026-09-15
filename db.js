@@ -57,7 +57,13 @@ class Database {
       this.customers = parsed.customers || [];
       this.inventory = parsed.inventory || [];
       this.cash_sessions = parsed.cash_sessions || [];
-      this.transactions = parsed.transactions || [];
+      this.transactions = (parsed.transactions || []).map(t => ({
+        ...t,
+        subtotal_lkr: t.subtotal_lkr !== undefined && t.subtotal_lkr !== null ? Number(t.subtotal_lkr) : Number(t.total_lkr || 0),
+        discount_type: t.discount_type || 'none',
+        discount_value: Number(t.discount_value || 0),
+        discount_amount: Number(t.discount_amount || 0)
+      }));
       this.transaction_items = parsed.transaction_items || [];
 
       // If users is empty, provide default admin accounts
@@ -296,6 +302,10 @@ class Database {
         '  `session_id` int(11) DEFAULT NULL,',
         '  `customer_nic` varchar(20) DEFAULT NULL,',
         '  `type` varchar(50) NOT NULL,',
+        '  `subtotal_lkr` decimal(10,2) DEFAULT 0.00,',
+        '  `discount_type` varchar(20) DEFAULT \'none\',',
+        '  `discount_value` decimal(10,2) DEFAULT 0.00,',
+        '  `discount_amount` decimal(10,2) DEFAULT 0.00,',
         '  `total_lkr` decimal(10,2) NOT NULL,',
         '  `received_amount` decimal(10,2) DEFAULT 0.00,',
         '  `balance_amount` decimal(10,2) DEFAULT 0.00,',
@@ -350,8 +360,14 @@ class Database {
 
       if (this.transactions && this.transactions.length) {
         lines.push('-- Dumping transactions');
-        lines.push('INSERT INTO `transactions` (`bill_number`, `session_id`, `customer_nic`, `type`, `total_lkr`, `received_amount`, `balance_amount`, `advance_paid`, `free_equipment`, `notes`, `status`, `transaction_date`) VALUES');
-        const rows = this.transactions.map(t => `  (${num(t.bill_number)}, ${num(t.session_id)}, ${str(t.customer_nic)}, ${str(t.type)}, ${num(t.total_lkr)}, ${num(t.received_amount)}, ${num(t.balance_amount)}, ${num(t.advance_paid)}, ${str(t.free_equipment)}, ${str(t.notes)}, ${str(t.status)}, ${str(t.transaction_date)})`);
+        lines.push('INSERT INTO `transactions` (`bill_number`, `session_id`, `customer_nic`, `type`, `subtotal_lkr`, `discount_type`, `discount_value`, `discount_amount`, `total_lkr`, `received_amount`, `balance_amount`, `advance_paid`, `free_equipment`, `notes`, `status`, `transaction_date`) VALUES');
+        const rows = this.transactions.map(t => {
+          const subtotal = t.subtotal_lkr !== undefined && t.subtotal_lkr !== null ? t.subtotal_lkr : t.total_lkr;
+          const discType = t.discount_type || 'none';
+          const discVal = t.discount_value || 0;
+          const discAmt = t.discount_amount || 0;
+          return `  (${num(t.bill_number)}, ${num(t.session_id)}, ${str(t.customer_nic)}, ${str(t.type)}, ${num(subtotal)}, ${str(discType)}, ${num(discVal)}, ${num(discAmt)}, ${num(t.total_lkr)}, ${num(t.received_amount)}, ${num(t.balance_amount)}, ${num(t.advance_paid)}, ${str(t.free_equipment)}, ${str(t.notes)}, ${str(t.status)}, ${str(t.transaction_date)})`;
+        });
         lines.push(rows.join(',\n') + ';\n');
       }
 
@@ -573,6 +589,10 @@ class Database {
     sessionId,
     customerNic,
     type,
+    subtotalLkr,
+    discountType = 'none',
+    discountValue = 0,
+    discountAmount = 0,
     totalLkr,
     receivedAmount,
     balanceAmount,
@@ -583,12 +603,20 @@ class Database {
     items = []
   }) {
     const billNumber = this.nextBillNumber++;
+    const subtotal = subtotalLkr !== undefined ? parseFloat(subtotalLkr) : parseFloat(totalLkr) || 0;
+    const discAmount = parseFloat(discountAmount) || 0;
+    const total = totalLkr !== undefined ? parseFloat(totalLkr) : Math.max(0, subtotal - discAmount);
+
     const tx = {
       bill_number: billNumber,
       session_id: Number(sessionId) || null,
       customer_nic: customerNic ? String(customerNic) : null,
       type: type, // 'selling' or 'renting'
-      total_lkr: parseFloat(totalLkr) || 0,
+      subtotal_lkr: subtotal,
+      discount_type: discountType || 'none',
+      discount_value: parseFloat(discountValue) || 0,
+      discount_amount: discAmount,
+      total_lkr: total,
       received_amount: parseFloat(receivedAmount) || 0,
       balance_amount: parseFloat(balanceAmount) || 0,
       advance_paid: parseFloat(advancePaid) || 0,
@@ -645,6 +673,10 @@ class Database {
 
     return {
       ...tx,
+      subtotal_lkr: tx.subtotal_lkr !== undefined && tx.subtotal_lkr !== null ? Number(tx.subtotal_lkr) : Number(tx.total_lkr || 0),
+      discount_type: tx.discount_type || 'none',
+      discount_value: Number(tx.discount_value || 0),
+      discount_amount: Number(tx.discount_amount || 0),
       items,
       customer
     };
@@ -857,15 +889,28 @@ class Database {
     return req;
   }
 
-  rejectChangeRequest(id, saUsername, notes = '') {
+  cancelChangeRequest(id, saUsername, notes = '') {
     const req = this.getChangeRequestById(id);
     if (!req) throw new Error('Request not found');
-    req.status = 'rejected';
+    req.status = 'cancelled';
     req.sa_action_by = saUsername || 'sa';
+    req.action_by = saUsername || 'sa';
     req.sa_action_at = new Date().toISOString();
-    req.sa_notes = notes || 'Rejected by Super Admin';
+    req.sa_notes = notes || 'Cancelled by Super Admin';
+    
+    // Explicitly confirm and preserve original values in inventory
+    const item = this.getItemById(req.item_id);
+    if (item) {
+      console.log(`[Change Request Cancelled] Req #${req.id} for "${item.item_name}" cancelled by ${saUsername}. Item values preserved: Qty=${item.stock_quantity}, Price=${item.price_per_unit}, Cost=${item.bought_price}`);
+      this.saveToSqlFile();
+    }
+
     this.saveChangeRequests();
-    return req;
+    return { req, item };
+  }
+
+  rejectChangeRequest(id, saUsername, notes = '') {
+    return this.cancelChangeRequest(id, saUsername, notes).req;
   }
 
   completeChangeRequest(id, completedBy) {
@@ -894,3 +939,4 @@ class Database {
 }
 
 export const db = new Database();
+export default db;

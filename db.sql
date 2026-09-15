@@ -1,5 +1,5 @@
 -- MCATS Database Dump
--- Synchronized: 2026-09-15T17:34:14.965Z
+-- Synchronized: 2026-09-15T19:13:13.602Z
 
 SET FOREIGN_KEY_CHECKS = 0;
 SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
@@ -61,6 +61,10 @@ CREATE TABLE `transactions` (
   `session_id` int(11) DEFAULT NULL,
   `customer_nic` varchar(20) DEFAULT NULL,
   `type` varchar(50) NOT NULL,
+  `subtotal_lkr` decimal(10,2) DEFAULT 0.00,
+  `discount_type` varchar(20) DEFAULT 'none',
+  `discount_value` decimal(10,2) DEFAULT 0.00,
+  `discount_amount` decimal(10,2) DEFAULT 0.00,
   `total_lkr` decimal(10,2) NOT NULL,
   `received_amount` decimal(10,2) DEFAULT 0.00,
   `balance_amount` decimal(10,2) DEFAULT 0.00,
@@ -87,7 +91,8 @@ CREATE TABLE `transaction_items` (
 INSERT INTO `customers` (`nic_number`, `phone_number`, `full_name`, `address`) VALUES
   ('199012345678', '0771112222', 'John Doe Construction', '123 Builder Lane, Colombo'),
   ('198598765432', '0714445555', 'Jane Smith Renovations', '456 Fixit Street, Kandy'),
-  ('200024681357', '0758889999', 'Michael Silva Mechanics', '789 Garage Road, Galle');
+  ('200024681357', '0758889999', 'Michael Silva Mechanics', '789 Garage Road, Galle'),
+  ('199512345678', '0779998888', 'Test Renter', '');
 
 -- Dumping users
 INSERT INTO `users` (`user_id`, `username`, `password`, `role`) VALUES
@@ -96,28 +101,42 @@ INSERT INTO `users` (`user_id`, `username`, `password`, `role`) VALUES
 
 -- Dumping inventory
 INSERT INTO `inventory` (`item_id`, `item_name`, `category`, `price_per_unit`, `stock_quantity`, `item_image`, `status`, `bought_price`) VALUES
-  (1, 'Cordless Rotary Hammer Drill 24V', 'Power Tools', 2850, 9, 'default.png', 'available', 'BLACK'),
-  (2, 'Bosch Angle Grinder Pro', 'Power Tools', 14500, 18, 'default.png', 'available', 'BLACKHORSE'),
-  (3, 'DeWalt Circular Saw', 'Power Tools', 28000, 3, 'default.png', 'available', NULL),
-  (4, 'Heavy Duty Steel Hammer', 'Hardware Goods', 1200, 20, 'default.png', 'available', NULL),
-  (5, 'PVC Pipe 1 inch', 'Hardware Goods', 450, 100, 'default.png', 'available', NULL),
-  (6, 'Assorted Screws Box', 'Hardware Goods', 850, 50, 'default.png', 'available', NULL),
-  (7, 'Portable Concrete Mixer', 'Rental Items', 3500, 2, 'default.png', 'available', NULL),
+  (1, 'Cordless Rotary Hammer Drill 24V', 'Power Tools', 3250, 24, 'default.png', 'available', 'HORSE'),
+  (2, 'Bosch Angle Grinder Pro', 'Power Tools', 14500, 17, 'default.png', 'available', '10200'),
+  (3, 'DeWalt Circular Saw', 'Power Tools', 28000, 2, 'default.png', 'available', NULL),
+  (4, 'Heavy Duty Steel Hammer', 'Hardware Goods', 1200, 18, 'default.png', 'available', NULL),
+  (5, 'PVC Pipe 1 inch', 'Hardware Goods', 450, 100, 'default.png', 'available', 'AOO'),
+  (6, 'Assorted Screws Box', 'Hardware Goods', 850, 49, 'default.png', 'available', NULL),
+  (7, 'Portable Concrete Mixer', 'Rental Items', 4000, 2, 'default.png', 'available', NULL),
   (8, 'Steel Scaffolding Set', 'Rental Items', 1500, 15, 'default.png', 'available', NULL),
   (9, 'Industrial Wet Vacuum', 'Rental Items', 2000, 4, 'default.png', 'available', NULL),
-  (10, 'Hitachi Rotary Hammer', 'Power Tools', 0, 0, 'default.png', 'available', '26000');
+  (10, 'Hitachi Rotary Hammer', 'Power Tools', 0, 0, 'default.png', 'available', '26000'),
+  (11, 'Test New Tool', 'Power Tools', 5500, 8, 'default.png', 'available', '4000');
 
 -- Dumping cash_sessions
 INSERT INTO `cash_sessions` (`id`, `user_id`, `opening_balance`, `closing_balance`, `opened_at`, `closed_at`, `status`) VALUES
   (1, 2, 5000, NULL, '2026-09-14T18:04:32.337Z', NULL, 'open');
 
 -- Dumping transactions
-INSERT INTO `transactions` (`bill_number`, `session_id`, `customer_nic`, `type`, `total_lkr`, `received_amount`, `balance_amount`, `advance_paid`, `free_equipment`, `notes`, `status`, `transaction_date`) VALUES
-  (1001, 1, '199512345678', 'renting', 1500, 3000, 1500, 2000, 'Safety Helmet & Gloves', NULL, 'returned', '2026-09-14T18:34:54.015Z');
+INSERT INTO `transactions` (`bill_number`, `session_id`, `customer_nic`, `type`, `subtotal_lkr`, `discount_type`, `discount_value`, `discount_amount`, `total_lkr`, `received_amount`, `balance_amount`, `advance_paid`, `free_equipment`, `notes`, `status`, `transaction_date`) VALUES
+  (1001, 1, '199512345678', 'renting', 1500, 'none', 0, 0, 1500, 3000, 1500, 2000, 'Safety Helmet & Gloves', NULL, 'returned', '2026-09-14T18:34:54.015Z'),
+  (1002, 1, NULL, 'selling', 15000, 'none', 0, 0, 15000, 15000, 0, 0, NULL, NULL, 'completed', '2026-09-15T18:03:40.939Z'),
+  (1003, 1, '199512345678', 'renting', 3500, 'none', 0, 0, 3500, 8500, 5000, 5000, NULL, NULL, 'returned', '2026-09-15T18:03:40.955Z'),
+  (1004, 1, NULL, 'selling', 2050, 'none', 0, 0, 2050, 5000, 2950, 0, NULL, NULL, 'completed', '2026-09-15T19:00:02.028Z'),
+  (1005, 1, NULL, 'selling', 42500, 'none', 0, 0, 42500, 50000, 7500, 0, NULL, NULL, 'completed', '2026-09-15T19:00:58.387Z'),
+  (1006, 1, NULL, 'selling', 20000, 'percentage', 10, 2000, 18000, 20000, 2000, 0, NULL, NULL, 'completed', '2026-09-15T19:13:13.602Z');
 
 -- Dumping transaction_items
 INSERT INTO `transaction_items` (`id`, `bill_number`, `item_id`, `quantity`, `unit_price`, `billed_days`, `is_free`) VALUES
-  (1, 1001, 1, 1, 1500, 1, 0);
+  (1, 1001, 1, 1, 1500, 1, 0),
+  (2, 1002, 1, 1, 15000, NULL, 0),
+  (3, 1003, 7, 1, 3500, 1, 0),
+  (4, 1004, 4, 1, 1200, NULL, 0),
+  (5, 1004, 6, 1, 850, NULL, 0),
+  (6, 1005, 2, 1, 14500, NULL, 0),
+  (7, 1005, 3, 1, 28000, NULL, 0),
+  (8, 1006, 1, 1, 15000, NULL, 0),
+  (9, 1006, 4, 1, 5000, NULL, 0);
 
 COMMIT;
 SET FOREIGN_KEY_CHECKS = 1;

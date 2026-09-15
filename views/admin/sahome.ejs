@@ -97,6 +97,10 @@
                     </div>
                 </div>
 
+                <% if (typeof msg !== 'undefined' && msg) { %>
+                    <%- msg %>
+                <% } %>
+
                 <% if (typeof db_flash !== 'undefined' && db_flash) { %>
                 <div class="alert alert-<%= db_flash.type %> alert-dismissible fade show rounded-3 shadow-sm mb-4" role="alert">
                     <i class="fa-solid fa-circle-check me-2"></i><strong>Database Notification:</strong> <%= db_flash.text %>
@@ -154,18 +158,119 @@
                                 <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1"><i class="fa-solid fa-check-circle me-1"></i>db.sql Active</span>
                             </div>
                             <div class="d-flex gap-2 mt-3 pt-2 border-top" style="border-color: var(--border-subtle) !important;">
-                                <form action="/api/db/reload" method="POST" class="d-inline m-0">
-                                    <button type="submit" class="btn btn-sm btn-outline-secondary d-flex align-items-center gap-1" title="Re-read db.sql from disk">
-                                        <i class="fa-solid fa-arrows-rotate"></i> Reload SQL
-                                    </button>
-                                </form>
                                 <a href="/api/db/export" class="btn btn-sm btn-luxury-gold d-flex align-items-center gap-1" title="Download latest db.sql backup">
-                                    <i class="fa-solid fa-download"></i> Export SQL
+                                    <i class="fa-solid fa-download"></i> Export SQL Backup
                                 </a>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- INCOMING CHANGE REQUESTS QUEUE -->
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 mt-4">
+                    <div>
+                        <h4 class="mb-0 fw-bold d-flex align-items-center gap-2">
+                            <span>Incoming Change Requests Queue</span>
+                            <% if (typeof pendingRequests !== 'undefined' && pendingRequests.length > 0) { %>
+                                <span class="badge bg-warning text-dark fs-6"><%= pendingRequests.length %> Pending</span>
+                            <% } %>
+                        </h4>
+                        <small class="text-muted">Cashier edit requests awaiting Super Admin approval or cancellation</small>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <a href="/views/admin/requests.php" class="btn btn-sm btn-luxury-outline">
+                            <i class="fa-solid fa-list-check me-1"></i> Full Request Registry &rarr;
+                        </a>
+                    </div>
+                </div>
+
+                <% if (typeof pendingRequests !== 'undefined' && pendingRequests.length > 0) { %>
+                <div class="luxury-card overflow-hidden mb-5">
+                    <div class="table-responsive">
+                        <table class="luxury-table align-middle">
+                            <thead>
+                                <tr>
+                                    <th>Req ID</th>
+                                    <th>Target Item</th>
+                                    <th>Category Type</th>
+                                    <th>Current &rarr; Proposed</th>
+                                    <th>Cashier Reason</th>
+                                    <th>Requested By</th>
+                                    <th class="text-end">Actions (Approve / Cancel)</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <% pendingRequests.forEach(function(req) { %>
+                                <tr>
+                                    <td class="fw-bold text-muted" style="font-family: var(--font-heading);">
+                                        #REQ-<%= String(req.id).padStart(3, '0') %>
+                                    </td>
+                                    <td>
+                                        <div class="fw-bold text-main"><%= req.item_name %></div>
+                                        <small class="text-muted">Item ID #<%= req.item_id %></small>
+                                    </td>
+                                    <td>
+                                        <% if (req.type === 'quantity') { %>
+                                            <span class="badge bg-warning text-dark"><i class="fa-solid fa-cubes-stacked me-1"></i>Quantity</span>
+                                        <% } else if (req.type === 'daily_rate') { %>
+                                            <span class="badge bg-info text-dark"><i class="fa-solid fa-tags me-1"></i>Daily Rate</span>
+                                        <% } else if (req.type === 'cost_price') { %>
+                                            <span class="badge bg-secondary"><i class="fa-solid fa-key me-1"></i>Cost Cipher Code</span>
+                                        <% } %>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <span class="text-muted small text-decoration-line-through">
+                                                <%= req.type === 'daily_rate' ? 'Rs. ' : '' %><%= req.current_value %><%= req.type === 'quantity' ? ' units' : '' %>
+                                            </span>
+                                            <i class="fa-solid fa-arrow-right small text-warning"></i>
+                                            <span class="fw-bold" style="color: var(--gold-primary);">
+                                                <%= req.type === 'daily_rate' ? 'Rs. ' : '' %><%= req.requested_value %><%= req.type === 'quantity' ? ' units' : '' %>
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="small" style="max-width: 250px; line-height: 1.4;"><%= req.reason || 'No details specified' %></div>
+                                    </td>
+                                    <td>
+                                        <div class="small fw-semibold"><i class="fa-solid fa-user me-1 text-muted"></i><%= req.requested_by %></div>
+                                        <div class="text-muted" style="font-size: 0.7rem;"><%= new Date(req.requested_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }) %></div>
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        <div class="d-inline-flex gap-2">
+                                            <form method="POST" action="/api/requests/approve" class="d-inline m-0">
+                                                <input type="hidden" name="request_id" value="<%= req.id %>">
+                                                <input type="hidden" name="redirect_to" value="/views/admin/sahome.php">
+                                                <button type="submit" class="btn btn-sm btn-success px-3 py-1" title="Accept & Authorize Admin">
+                                                    <i class="fa-solid fa-check me-1"></i> Accept
+                                                </button>
+                                            </form>
+                                            <button type="button" class="btn btn-sm btn-outline-danger px-3 py-1 btn-cancel-req"
+                                                data-req-id="<%= req.id %>"
+                                                data-item-name="<%= req.item_name %>"
+                                                data-req-type="<%= req.type %>"
+                                                data-current-val="<%= req.current_value %>"
+                                                data-requested-val="<%= req.requested_value %>"
+                                                title="Cancel Request (Keep Original Value)">
+                                                <i class="fa-solid fa-ban me-1"></i> Cancel
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <% }); %>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <% } else { %>
+                <div class="luxury-card p-3 mb-5 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center gap-2 text-muted small">
+                        <i class="fa-solid fa-circle-check text-success fs-5"></i>
+                        <span>Zero pending change requests. All item details are up to date and verified.</span>
+                    </div>
+                    <a href="/views/admin/requests.php" class="small text-decoration-none" style="color: var(--gold-primary);">View Audit Trail &rarr;</a>
+                </div>
+                <% } %>
 
                 <!-- USER MANAGEMENT -->
                 <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 mt-4">
@@ -230,6 +335,63 @@
         </div>
     </div>
 
+    <!-- Super Admin Cancel Request Confirmation Modal -->
+    <div class="modal fade" id="cancelRequestModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content" style="background: var(--bg-surface); border: 1px solid var(--border-subtle); color: var(--text-primary);">
+                <form action="/api/requests/cancel" method="POST" id="cancelRequestForm">
+                    <input type="hidden" name="redirect_to" value="/views/admin/sahome.php">
+                    <input type="hidden" name="request_id" id="cancelReqIdInput">
+                    <div class="modal-header border-bottom" style="border-color: var(--border-subtle) !important;">
+                        <h5 class="modal-title fw-bold text-danger d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-ban"></i>
+                            <span>Cancel Edit Request</span>
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body p-4">
+                        <p class="mb-3">Are you sure you want to cancel this request? <strong>The target item will strictly keep its existing catalog values.</strong></p>
+                        
+                        <div class="p-3 rounded-3 mb-3" style="background: var(--bg-surface-elevated); border: 1px solid var(--border-subtle);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small text-muted">Item:</span>
+                                <span class="fw-bold" id="cancelItemNameDisplay"></span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small text-muted">Category:</span>
+                                <span class="badge bg-secondary" id="cancelTypeDisplay"></span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small text-muted">Proposed Edit:</span>
+                                <span class="small text-muted text-decoration-line-through" id="cancelRequestedValDisplay"></span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center pt-2 border-top" style="border-color: var(--border-subtle) !important;">
+                                <span class="small text-muted">Value Kept:</span>
+                                <span class="small text-success fw-bold" id="cancelCurrentValDisplay"></span>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">Reason for Cancellation (Optional)</label>
+                            <textarea name="reason" id="cancelReasonInput" rows="2" class="form-control luxury-input" placeholder="e.g. Existing pricing policy maintained, supplier confirmation pending, physical count verified..."></textarea>
+                        </div>
+
+                        <div class="alert alert-warning small py-2 mb-0 d-flex align-items-center gap-2">
+                            <i class="fa-solid fa-shield-halved fs-5 text-warning flex-shrink-0"></i>
+                            <span>Once cancelled, stock quantity, selling rate, or cost code remain locked at their original values.</span>
+                        </div>
+                    </div>
+                    <div class="modal-footer border-top" style="border-color: var(--border-subtle) !important;">
+                        <button type="button" class="btn btn-luxury-outline" data-bs-dismiss="modal">Keep Request</button>
+                        <button type="submit" class="btn btn-danger fw-bold px-4">
+                            <i class="fa-solid fa-ban me-1"></i> Cancel Request & Keep Values
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
@@ -268,6 +430,46 @@
         }
         setInterval(updateClock, 1000);
         updateClock();
+
+        // Cancel Request Modal Helper
+        function openCancelModal(reqId, itemName, reqType, currentVal, requestedVal) {
+            document.getElementById('cancelReqIdInput').value = reqId;
+            document.getElementById('cancelItemNameDisplay').textContent = itemName;
+            
+            let typeText = 'Quantity';
+            let currFormatted = currentVal + ' units';
+            let reqFormatted = requestedVal + ' units';
+            
+            if (reqType === 'daily_rate') {
+                typeText = 'Daily Rate (Price)';
+                currFormatted = 'Rs. ' + Number(currentVal || 0).toFixed(2);
+                reqFormatted = 'Rs. ' + Number(requestedVal || 0).toFixed(2);
+            } else if (reqType === 'cost_price') {
+                typeText = 'Cost Cipher Code';
+                currFormatted = currentVal || 'None';
+                reqFormatted = requestedVal || 'None';
+            }
+            
+            document.getElementById('cancelTypeDisplay').textContent = typeText;
+            document.getElementById('cancelCurrentValDisplay').textContent = currFormatted + ' (Kept Unchanged)';
+            document.getElementById('cancelRequestedValDisplay').textContent = reqFormatted;
+            document.getElementById('cancelReasonInput').value = '';
+            
+            const modal = new bootstrap.Modal(document.getElementById('cancelRequestModal'));
+            modal.show();
+        }
+
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.btn-cancel-req');
+            if (!btn) return;
+            openCancelModal(
+                btn.dataset.reqId,
+                btn.dataset.itemName,
+                btn.dataset.reqType,
+                btn.dataset.currentVal,
+                btn.dataset.requestedVal
+            );
+        });
     </script>
 </body>
 </html>
