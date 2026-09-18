@@ -137,7 +137,7 @@
                             <label class="form-label text-white-50 small fw-semibold">Username</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent border-end-0 text-muted" style="border-color: rgba(255,255,255,0.12);"><i class="fa-solid fa-user"></i></span>
-                                <input type="text" id="usernameInput" class="form-control luxury-input border-start-0" name="username" placeholder="e.g. sa or admin" required style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);" value="admin">
+                                <input type="text" id="usernameInput" class="form-control luxury-input border-start-0" name="username" placeholder="Enter username" required autocomplete="username" style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);" autofocus>
                             </div>
                         </div>
 
@@ -145,7 +145,7 @@
                             <label class="form-label text-white-50 small fw-semibold">Password</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent border-end-0 text-muted" style="border-color: rgba(255,255,255,0.12);"><i class="fa-solid fa-lock"></i></span>
-                                <input type="password" id="passwordInput" class="form-control luxury-input border-start-0" name="password" placeholder="••••••••" required style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);" value="admin@2026">
+                                <input type="password" id="passwordInput" class="form-control luxury-input border-start-0" name="password" placeholder="••••••••" required autocomplete="current-password" style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);">
                             </div>
                         </div>
 
@@ -153,27 +153,6 @@
                             Authenticate & Enter <i class="fa-solid fa-arrow-right ms-2"></i>
                         </button>
                     </form>
-
-                    <div class="mt-4 p-3 rounded-3" style="background: rgba(255, 255, 255, 0.04); border: 1px dashed rgba(212, 175, 55, 0.3);">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <span class="small text-white-50 fw-bold"><i class="fa-solid fa-key text-warning me-1"></i> Demo Credentials:</span>
-                            <span class="badge bg-dark text-warning border border-warning-subtle" style="font-size: 0.68rem;">1-Click Login</span>
-                        </div>
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <button type="button" class="btn btn-sm w-100 text-start py-2 px-2 rounded-2" onclick="quickLogin('admin', 'admin@2026')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff;">
-                                    <div class="fw-bold small text-warning"><i class="fa-solid fa-user-shield me-1"></i> Cashier</div>
-                                    <div class="text-white-50" style="font-size: 0.72rem;">admin / admin@2026</div>
-                                </button>
-                            </div>
-                            <div class="col-6">
-                                <button type="button" class="btn btn-sm w-100 text-start py-2 px-2 rounded-2" onclick="quickLogin('sa', 'sa@2026')" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #fff;">
-                                    <div class="fw-bold small" style="color: #60a5fa;"><i class="fa-solid fa-crown me-1"></i> Super Admin</div>
-                                    <div class="text-white-50" style="font-size: 0.72rem;">sa / sa@2026</div>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
 
                     <div class="mt-4 text-center pt-3 border-top" style="border-color: rgba(255,255,255,0.08) !important;">
                         <span class="text-muted small d-block mb-1">
@@ -211,7 +190,7 @@
                                 <i class="fa-solid fa-clock-rotate-left"></i>
                             </div>
                             <div>
-                                <h6 class="mb-0 fw-bold">POS Rentals</h6>
+                                <h6 class="mb-0 fw-bold">Rentals & Returns</h6>
                                 <small class="text-white-50">2-stage checkouts</small>
                             </div>
                         </div>
@@ -243,12 +222,6 @@
                     <span class="small fw-semibold">\${msg}</span>
                 </div>
             `;
-        }
-
-        function quickLogin(username, password) {
-            document.getElementById('usernameInput').value = username;
-            document.getElementById('passwordInput').value = password;
-            executeLogin(username, password);
         }
 
         async function executeLogin(username, password) {

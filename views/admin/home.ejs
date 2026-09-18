@@ -29,6 +29,11 @@
             <!-- Sidebar -->
             <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block luxury-sidebar offcanvas-md offcanvas-start">
                 <div class="position-sticky pt-3 px-3">
+                    <!-- Mobile Close Header -->
+                    <div class="d-md-none d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom" style="border-color: var(--obsidian-border) !important;">
+                        <span class="luxury-brand-title fs-5">MCATS ADMIN</span>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas" data-bs-target="#sidebarMenu" aria-label="Close"></button>
+                    </div>
                     <div class="d-none d-md-block mb-4 text-center pb-3 border-bottom" style="border-color: var(--obsidian-border) !important;">
                         <img src="/img/logo.png" style="width: 70px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));" class="mb-2" alt="MCATS Logo">
                         <h4 class="luxury-brand-title m-0">MCATS ADMIN</h4>
@@ -37,11 +42,62 @@
                     <div class="nav flex-column">
                         <a href="/views/admin/home.php" class="luxury-nav-link active"><i class="fa-solid fa-gauge"></i>Dashboard</a>
                         <a href="/views/pos/sell.php" class="luxury-nav-link"><i class="fa-solid fa-cart-shopping"></i>Selling</a>
-                        <a href="/views/pos/rent.php" class="luxury-nav-link"><i class="fa-solid fa-clock-rotate-left"></i>POS</a>
-                        <a href="/views/admin/inventory.php" class="luxury-nav-link"><i class="fa-solid fa-box"></i>Inventory</a>
-                        <a href="/views/admin/requests_qty.php" class="luxury-nav-link"><i class="fa-solid fa-cubes-stacked"></i>Qty Requests <% if (typeof pendingQty !== 'undefined' && pendingQty > 0) { %><span class="badge bg-warning text-dark ms-auto"><%= pendingQty %></span><% } %></a>
-                        <a href="/views/admin/requests_rate.php" class="luxury-nav-link"><i class="fa-solid fa-tags"></i>Rate Requests <% if (typeof pendingRate !== 'undefined' && pendingRate > 0) { %><span class="badge bg-info ms-auto"><%= pendingRate %></span><% } %></a>
-                        <a href="/views/admin/requests_cost.php" class="luxury-nav-link"><i class="fa-solid fa-key"></i>Cost Requests <% if (typeof pendingCost !== 'undefined' && pendingCost > 0) { %><span class="badge bg-secondary ms-auto"><%= pendingCost %></span><% } %></a>
+                        
+                        <!-- Rentals Dropdown -->
+                        <a href="#rentalsSubmenu" data-bs-toggle="collapse" class="luxury-nav-link collapsed d-flex align-items-center" role="button" aria-expanded="false">
+                            <i class="fa-solid fa-clock-rotate-left"></i>
+                            <span>Rentals</span>
+                            <i class="fa-solid fa-chevron-down nav-arrow"></i>
+                        </a>
+                        <div class="collapse luxury-submenu" id="rentalsSubmenu">
+                            <a href="/views/pos/rent.php" class="luxury-sub-link">
+                                <i class="fa-solid fa-cart-flatbed"></i> Rental Terminal
+                            </a>
+                            <a href="/views/pos/return_items.php" class="luxury-sub-link">
+                                <i class="fa-solid fa-rotate-left"></i> Item Return Desk
+                            </a>
+                            <a href="/views/pos/pay_later.php" class="luxury-sub-link">
+                                <i class="fa-solid fa-hand-holding-dollar"></i> Pay Later
+                            </a>
+                        </div>
+
+                        <!-- Inventory Dropdown -->
+                        <a href="#inventorySubmenu" data-bs-toggle="collapse" class="luxury-nav-link collapsed d-flex align-items-center" role="button" aria-expanded="false">
+                            <i class="fa-solid fa-boxes-stacked"></i>
+                            <span>Inventory</span>
+                            <% 
+                                const totalPendingInv = (typeof pendingQty !== 'undefined' ? pendingQty : 0) + 
+                                                       (typeof pendingRate !== 'undefined' ? pendingRate : 0) + 
+                                                       (typeof pendingCost !== 'undefined' ? pendingCost : 0);
+                                if (totalPendingInv > 0) { 
+                            %>
+                                <span class="badge bg-warning text-dark rounded-pill ms-2" style="font-size: 0.65rem;"><%= totalPendingInv %></span>
+                            <% } %>
+                            <i class="fa-solid fa-chevron-down nav-arrow"></i>
+                        </a>
+                        <div class="collapse luxury-submenu" id="inventorySubmenu">
+                            <a href="/views/admin/inventory.php" class="luxury-sub-link">
+                                <i class="fa-solid fa-warehouse"></i> Stock Inventory
+                            </a>
+                            <a href="/views/admin/requests_qty.php" class="luxury-sub-link d-flex align-items-center justify-content-between">
+                                <span><i class="fa-solid fa-cubes-stacked"></i> Qty Requests</span>
+                                <% if (typeof pendingQty !== 'undefined' && pendingQty > 0) { %>
+                                    <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size: 0.62rem;"><%= pendingQty %></span>
+                                <% } %>
+                            </a>
+                            <a href="/views/admin/requests_rate.php" class="luxury-sub-link d-flex align-items-center justify-content-between">
+                                <span><i class="fa-solid fa-tags"></i> Rate Requests</span>
+                                <% if (typeof pendingRate !== 'undefined' && pendingRate > 0) { %>
+                                    <span class="badge bg-info text-white rounded-pill ms-1" style="font-size: 0.62rem;"><%= pendingRate %></span>
+                                <% } %>
+                            </a>
+                            <a href="/views/admin/requests_cost.php" class="luxury-sub-link d-flex align-items-center justify-content-between">
+                                <span><i class="fa-solid fa-key"></i> Cost Requests</span>
+                                <% if (typeof pendingCost !== 'undefined' && pendingCost > 0) { %>
+                                    <span class="badge bg-secondary text-white rounded-pill ms-1" style="font-size: 0.62rem;"><%= pendingCost %></span>
+                                <% } %>
+                            </a>
+                        </div>
                         <a href="/logout.php" class="luxury-nav-link logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
                     </div>
                 </div>
@@ -174,27 +230,32 @@
                         </a>
                     </div>
 
-                    <!-- POS CARD (RENTAL) -->
+                    <!-- RENTALS CARD -->
                     <div class="col-md-6 col-lg-4">
-                        <a href="/views/pos/rent.php" class="text-decoration-none text-reset">
-                            <div class="luxury-card h-100 p-4 position-relative overflow-hidden">
+                        <div class="luxury-card h-100 p-4 position-relative overflow-hidden d-flex flex-column justify-content-between">
+                            <div>
                                 <div class="d-flex align-items-center gap-3 mb-3">
                                     <div class="rounded-3 p-3 d-flex align-items-center justify-content-center" style="width: 54px; height: 54px; background: rgba(16, 185, 129, 0.15); color: var(--success-emerald);">
                                         <i class="fa-solid fa-clock-rotate-left fs-4"></i>
                                     </div>
                                     <div>
-                                        <h4 class="mb-0 fw-bold">POS</h4>
-                                        <span class="luxury-badge luxury-badge-emerald mt-1">Rental Terminal</span>
+                                        <h4 class="mb-0 fw-bold">Rentals</h4>
+                                        <span class="luxury-badge luxury-badge-emerald mt-1">Equipment Lease & Returns</span>
                                     </div>
                                 </div>
                                 <p class="text-muted small mb-4" style="line-height: 1.6;">
-                                    Manage 2-stage rental lifecycle for heavy equipment. Handle customer profiles, collect advance deposits, and settle final returns.
+                                    Manage 2-stage rental lifecycle for heavy equipment. Issue gear, collect deposits, and process check-ins at the Item Return Desk.
                                 </p>
-                                <div class="d-flex align-items-center text-success fw-semibold small gap-1">
-                                    Launch Terminal <i class="fa-solid fa-arrow-right ms-1"></i>
-                                </div>
                             </div>
-                        </a>
+                            <div class="d-flex align-items-center justify-content-between gap-2 pt-3 border-top border-secondary-subtle">
+                                <a href="/views/pos/rent.php" class="btn btn-luxury-gold btn-sm rounded-pill px-3 fw-bold">
+                                    <i class="fa-solid fa-cart-flatbed me-1"></i> Rental Terminal
+                                </a>
+                                <a href="/views/pos/return_items.php" class="btn btn-outline-secondary rounded-pill btn-sm px-3 fw-semibold">
+                                    <i class="fa-solid fa-rotate-left me-1"></i> Return Desk
+                                </a>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- INVENTORY CARD -->
@@ -271,8 +332,10 @@
 
         if (localStorage.getItem('theme') === 'dark') {
             html.setAttribute('data-bs-theme', 'dark');
-            updateToggleText();
+        } else if (localStorage.getItem('theme') === 'light') {
+            html.setAttribute('data-bs-theme', 'light');
         }
+        updateToggleText();
 
         toggleBtn.addEventListener('click', () => {
             if (html.getAttribute('data-bs-theme') === 'dark') {

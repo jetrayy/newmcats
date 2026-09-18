@@ -26,6 +26,7 @@ class Database {
     this.transactions = [];
     this.transaction_items = [];
     this.change_requests = [];
+    this.pay_later_payments = [];
 
     this.nextUserId = 1;
     this.nextItemId = 1;
@@ -33,6 +34,7 @@ class Database {
     this.nextBillNumber = 1001;
     this.nextTxItemId = 1;
     this.nextRequestId = 1;
+    this.nextPaymentId = 1;
 
     // Load from db.sql on startup
     this.loadFromSqlFile(SQL_FILE_PATH);
@@ -65,6 +67,22 @@ class Database {
         discount_amount: Number(t.discount_amount || 0)
       }));
       this.transaction_items = parsed.transaction_items || [];
+      this.pay_later_payments = parsed.pay_later_payments || [];
+      if (!this.pay_later_payments || this.pay_later_payments.length === 0) {
+        this.pay_later_payments = [
+          {
+            payment_id: 1,
+            bill_number: 1010,
+            amount: 2000.00,
+            payment_method: 'Cash',
+            payment_date: '2026-09-17T10:30:00.000Z',
+            notes: 'Partial payment tendered at return desk'
+          }
+        ];
+      }
+      if (parsed.change_requests && parsed.change_requests.length > 0) {
+        this.change_requests = parsed.change_requests;
+      }
 
       // If users is empty, provide default admin accounts
       if (this.users.length === 0) {
@@ -120,6 +138,8 @@ class Database {
     this.nextSessionId = Math.max(0, ...this.cash_sessions.map(s => Number(s.id) || 0)) + 1;
     this.nextBillNumber = Math.max(1000, ...this.transactions.map(t => Number(t.bill_number) || 0)) + 1;
     this.nextTxItemId = Math.max(0, ...this.transaction_items.map(ti => Number(ti.id) || 0)) + 1;
+    this.nextPaymentId = Math.max(0, ...(this.pay_later_payments || []).map(p => Number(p.payment_id) || 0)) + 1;
+    this.nextRequestId = Math.max(0, ...(this.change_requests || []).map(r => Number(r.id) || 0)) + 1;
   }
 
   initFallbacks() {
@@ -139,15 +159,30 @@ class Database {
       { item_id: 4, item_name: 'Heavy Duty Steel Hammer', category: 'Hardware Goods', price_per_unit: 1200.00, stock_quantity: 20, item_image: 'default.png', status: 'available', bought_price: '750' },
       { item_id: 5, item_name: 'PVC Pipe 1 inch', category: 'Hardware Goods', price_per_unit: 450.00, stock_quantity: 100, item_image: 'default.png', status: 'available', bought_price: '280' },
       { item_id: 6, item_name: 'Assorted Screws Box', category: 'Hardware Goods', price_per_unit: 850.00, stock_quantity: 50, item_image: 'default.png', status: 'available', bought_price: '500' },
-      { item_id: 7, item_name: 'Portable Concrete Mixer', category: 'Rental Items', price_per_unit: 3500.00, stock_quantity: 2, item_image: 'default.png', status: 'available', bought_price: '75000' },
-      { item_id: 8, item_name: 'Steel Scaffolding Set', category: 'Rental Items', price_per_unit: 1500.00, stock_quantity: 15, item_image: 'default.png', status: 'available', bought_price: '30000' },
-      { item_id: 9, item_name: 'Industrial Wet Vacuum', category: 'Rental Items', price_per_unit: 2000.00, stock_quantity: 4, item_image: 'default.png', status: 'available', bought_price: '40000' }
+      { item_id: 7, item_name: 'Portable Concrete Mixer', category: 'Rental Items', price_per_unit: 4000.00, stock_quantity: 2, item_image: 'default.png', status: 'rented', bought_price: '75000' },
+      { item_id: 8, item_name: 'Steel Scaffolding Set', category: 'Rental Items', price_per_unit: 1500.00, stock_quantity: 15, item_image: 'default.png', status: 'rented', bought_price: '30000' },
+      { item_id: 9, item_name: 'Industrial Wet Vacuum', category: 'Rental Items', price_per_unit: 2000.00, stock_quantity: 4, item_image: 'default.png', status: 'rented', bought_price: '40000' },
+      { item_id: 12, item_name: 'Demolition Jackhammer 16kg', category: 'Rental Items', price_per_unit: 4500.00, stock_quantity: 3, item_image: 'default.png', status: 'available', bought_price: '95000' },
+      { item_id: 13, item_name: 'High Pressure Water Jet Cleaner', category: 'Rental Items', price_per_unit: 2500.00, stock_quantity: 5, item_image: 'default.png', status: 'available', bought_price: '52000' },
+      { item_id: 14, item_name: 'Heavy Plate Compactor 90kg', category: 'Rental Items', price_per_unit: 3800.00, stock_quantity: 2, item_image: 'default.png', status: 'available', bought_price: '82000' }
     ];
     this.cash_sessions = [
       { id: 1, user_id: 2, opening_balance: 5000.00, closing_balance: null, opened_at: new Date().toISOString(), closed_at: null, status: 'open' }
     ];
-    this.transactions = [];
-    this.transaction_items = [];
+    this.transactions = [
+      { bill_number: 1007, session_id: 1, customer_nic: '199012345678', type: 'renting', subtotal_lkr: 4000, discount_type: 'none', discount_value: 0, discount_amount: 0, total_lkr: 4000, received_amount: 10000, balance_amount: 0, advance_paid: 10000, free_equipment: 'Heavy Extension Cable (30m) & Safety Goggles', notes: 'Commercial site foundation pour', status: 'ongoing', transaction_date: '2026-09-16T09:30:00.000Z' },
+      { bill_number: 1008, session_id: 1, customer_nic: '198598765432', type: 'renting', subtotal_lkr: 3000, discount_type: 'none', discount_value: 0, discount_amount: 0, total_lkr: 3000, received_amount: 6000, balance_amount: 0, advance_paid: 6000, free_equipment: 'Safety Harness & Locking Clamp Pins', notes: 'Exterior facade renovation', status: 'ongoing', transaction_date: '2026-09-16T14:15:00.000Z' },
+      { bill_number: 1009, session_id: 1, customer_nic: '200024681357', type: 'renting', subtotal_lkr: 2000, discount_type: 'none', discount_value: 0, discount_amount: 0, total_lkr: 2000, received_amount: 5000, balance_amount: 0, advance_paid: 5000, free_equipment: 'Wide Suction Brush & Cartridge Filter', notes: 'Workshop deep cleaning', status: 'ongoing', transaction_date: '2026-09-17T08:45:00.000Z' },
+      { bill_number: 1010, session_id: 1, customer_nic: '199512345678', type: 'renting', subtotal_lkr: 8000, discount_type: 'none', discount_value: 0, discount_amount: 0, total_lkr: 8000, received_amount: 5000, balance_amount: -3000, advance_paid: 3000, free_equipment: 'Heavy Duty Extension Reel', notes: 'Pay Later Agreement: Due Rs. 3,000.00 | Customer had insufficient cash at return, promised balance payment on Friday', status: 'pay_later', transaction_date: '2026-09-15T11:20:00.000Z' },
+      { bill_number: 1011, session_id: 1, customer_nic: '199012345678', type: 'renting', subtotal_lkr: 9000, discount_type: 'none', discount_value: 0, discount_amount: 0, total_lkr: 9000, received_amount: 4000, balance_amount: -5000, advance_paid: 4000, free_equipment: 'Chisel bits & Ear Muffs', notes: 'Pay Later Agreement: Due Rs. 5,000.00 | Site manager away, promised settlement within 3 days', status: 'pay_later', transaction_date: '2026-09-16T08:15:00.000Z' }
+    ];
+    this.transaction_items = [
+      { id: 10, bill_number: 1007, item_id: 7, quantity: 1, unit_price: 4000, billed_days: 1, is_free: 0 },
+      { id: 11, bill_number: 1008, item_id: 8, quantity: 2, unit_price: 1500, billed_days: 1, is_free: 0 },
+      { id: 12, bill_number: 1009, item_id: 9, quantity: 1, unit_price: 2000, billed_days: 1, is_free: 0 },
+      { id: 13, bill_number: 1010, item_id: 7, quantity: 1, unit_price: 4000, billed_days: 2, is_free: 0 },
+      { id: 14, bill_number: 1011, item_id: 12, quantity: 1, unit_price: 4500, billed_days: 2, is_free: 0 }
+    ];
     this.recalculateNextIds();
   }
 
@@ -158,7 +193,9 @@ class Database {
       inventory: [],
       cash_sessions: [],
       transactions: [],
-      transaction_items: []
+      transaction_items: [],
+      change_requests: [],
+      pay_later_payments: []
     };
 
     const insertRegex = /INSERT\s+INTO\s+[`"]?([a-zA-Z0-9_]+)[`"]?\s*\(([^)]+)\)\s*VALUES\s*([\s\S]*?);/gi;
@@ -250,6 +287,8 @@ class Database {
         'CREATE DATABASE IF NOT EXISTS `mcats`;',
         'USE `mcats`;',
         '',
+        'DROP TABLE IF EXISTS `pay_later_payments`;',
+        'DROP TABLE IF EXISTS `change_requests`;',
         'DROP TABLE IF EXISTS `transaction_items`;',
         'DROP TABLE IF EXISTS `transactions`;',
         'DROP TABLE IF EXISTS `cash_sessions`;',
@@ -327,6 +366,37 @@ class Database {
         '  `is_free` tinyint(1) DEFAULT 0,',
         '  PRIMARY KEY (`id`)',
         ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;',
+        '',
+        'CREATE TABLE `change_requests` (',
+        '  `id` int(11) NOT NULL AUTO_INCREMENT,',
+        '  `type` enum(\'quantity\',\'daily_rate\',\'cost_price\') NOT NULL,',
+        '  `item_id` int(11) NOT NULL,',
+        '  `item_name` varchar(100) NOT NULL,',
+        '  `current_value` varchar(50) DEFAULT NULL,',
+        '  `requested_value` varchar(50) NOT NULL,',
+        '  `reason` text DEFAULT NULL,',
+        '  `requested_by` varchar(50) NOT NULL,',
+        '  `requested_at` timestamp NOT NULL DEFAULT current_timestamp(),',
+        '  `status` enum(\'pending\',\'approved\',\'completed\',\'cancelled\',\'rejected\') DEFAULT \'pending\',',
+        '  `sa_action_by` varchar(50) DEFAULT NULL,',
+        '  `sa_action_at` timestamp NULL DEFAULT NULL,',
+        '  `sa_notes` text DEFAULT NULL,',
+        '  `completed_at` timestamp NULL DEFAULT NULL,',
+        '  `completed_by` varchar(50) DEFAULT NULL,',
+        '  PRIMARY KEY (`id`),',
+        '  KEY `item_id` (`item_id`)',
+        ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;',
+        '',
+        'CREATE TABLE `pay_later_payments` (',
+        '  `payment_id` int(11) NOT NULL AUTO_INCREMENT,',
+        '  `bill_number` int(11) NOT NULL,',
+        '  `amount` decimal(10,2) NOT NULL,',
+        '  `payment_method` varchar(50) DEFAULT \'Cash\',',
+        '  `payment_date` timestamp NOT NULL DEFAULT current_timestamp(),',
+        '  `notes` text DEFAULT NULL,',
+        '  PRIMARY KEY (`payment_id`),',
+        '  KEY `bill_number` (`bill_number`)',
+        ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;',
         ''
       ];
 
@@ -375,6 +445,20 @@ class Database {
         lines.push('-- Dumping transaction_items');
         lines.push('INSERT INTO `transaction_items` (`id`, `bill_number`, `item_id`, `quantity`, `unit_price`, `billed_days`, `is_free`) VALUES');
         const rows = this.transaction_items.map(ti => `  (${num(ti.id)}, ${num(ti.bill_number)}, ${num(ti.item_id)}, ${num(ti.quantity)}, ${num(ti.unit_price)}, ${num(ti.billed_days)}, ${num(ti.is_free)})`);
+        lines.push(rows.join(',\n') + ';\n');
+      }
+
+      if (this.change_requests && this.change_requests.length) {
+        lines.push('-- Dumping change_requests');
+        lines.push('INSERT INTO `change_requests` (`id`, `type`, `item_id`, `item_name`, `current_value`, `requested_value`, `reason`, `requested_by`, `requested_at`, `status`, `sa_action_by`, `sa_action_at`, `sa_notes`, `completed_at`, `completed_by`) VALUES');
+        const rows = this.change_requests.map(r => `  (${num(r.id)}, ${str(r.type)}, ${num(r.item_id)}, ${str(r.item_name)}, ${str(r.current_value)}, ${str(r.requested_value)}, ${str(r.reason)}, ${str(r.requested_by)}, ${str(r.requested_at)}, ${str(r.status)}, ${str(r.sa_action_by)}, ${str(r.sa_action_at)}, ${str(r.sa_notes)}, ${str(r.completed_at)}, ${str(r.completed_by)})`);
+        lines.push(rows.join(',\n') + ';\n');
+      }
+
+      if (this.pay_later_payments && this.pay_later_payments.length) {
+        lines.push('-- Dumping pay_later_payments');
+        lines.push('INSERT INTO `pay_later_payments` (`payment_id`, `bill_number`, `amount`, `payment_method`, `payment_date`, `notes`) VALUES');
+        const rows = this.pay_later_payments.map(p => `  (${num(p.payment_id)}, ${num(p.bill_number)}, ${num(p.amount)}, ${str(p.payment_method)}, ${str(p.payment_date)}, ${str(p.notes)})`);
         lines.push(rows.join(',\n') + ';\n');
       }
 
@@ -699,17 +783,17 @@ class Database {
       .reduce((sum, t) => sum + (Number(t.received_amount || 0) - Number(t.balance_amount || 0)), 0);
   }
 
-  processRentalReturn(billNumber, daysPerItem = {}, cashReceived = 0) {
+  processRentalReturn(billNumber, daysPerItem = {}, cashReceived = 0, options = {}) {
     const tx = this.transactions.find(t => Number(t.bill_number) === Number(billNumber));
     if (!tx) return null;
 
     const items = this.transaction_items.filter(ti => Number(ti.bill_number) === Number(billNumber));
-    let finalFee = 0;
+    let grossFee = 0;
 
     for (const ti of items) {
       const days = parseInt(daysPerItem[ti.id] !== undefined ? daysPerItem[ti.id] : (daysPerItem[String(ti.id)] || 1), 10) || 1;
       ti.billed_days = days;
-      finalFee += (ti.quantity * ti.unit_price * days);
+      grossFee += (ti.quantity * ti.unit_price * days);
 
       // Release inventory item back to available
       const invItem = this.getItemById(ti.item_id);
@@ -718,13 +802,74 @@ class Database {
       }
     }
 
-    const newReceivedTotal = Number(tx.received_amount || 0) + parseFloat(cashReceived || 0);
+    const discount = Math.max(0, parseFloat(options.discount || 0) || 0);
+    const finalFee = Math.max(0, grossFee - discount);
+
+    const advancePaid = Number(tx.advance_paid || 0);
+    const tenderedNow = parseFloat(cashReceived || 0) || 0;
+    const newReceivedTotal = advancePaid + tenderedNow;
     const newBalance = newReceivedTotal - finalFee;
 
-    tx.status = 'returned';
+    const isPayLater = Boolean(options.isPayLater || (newBalance < 0 && options.allowPayLater));
+
+    tx.subtotal_lkr = grossFee;
+    tx.discount_amount = discount;
     tx.total_lkr = finalFee;
     tx.received_amount = newReceivedTotal;
     tx.balance_amount = newBalance;
+
+    if (isPayLater && newBalance < 0) {
+      tx.status = 'pay_later';
+      const pendingDue = Math.abs(newBalance);
+      const noteParts = [];
+      if (tx.notes && !tx.notes.includes('Pay Later')) noteParts.push(tx.notes);
+      noteParts.push(`Pay Later Agreement: Due Rs. ${pendingDue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      if (options.dueDate) noteParts.push(`Promise Date: ${options.dueDate}`);
+      if (options.payLaterNotes) noteParts.push(options.payLaterNotes);
+      tx.notes = noteParts.join(' | ');
+    } else {
+      tx.status = 'returned';
+    }
+
+    this.saveToSqlFile();
+    return tx;
+  }
+
+  recordPayLaterPayment(billNumber, paymentAmount, paymentMethod = 'Cash', paymentNotes = '') {
+    const tx = this.transactions.find(t => Number(t.bill_number) === Number(billNumber));
+    if (!tx) return null;
+
+    const amt = parseFloat(paymentAmount) || 0;
+    if (amt <= 0) return tx;
+
+    const prevReceived = Number(tx.received_amount || 0);
+    const totalFee = Number(tx.total_lkr || 0);
+    const newReceived = prevReceived + amt;
+    const newBalance = newReceived - totalFee;
+
+    tx.received_amount = newReceived;
+    tx.balance_amount = newBalance;
+
+    const dateStr = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const logEntry = `Payment of Rs. ${amt.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} received via ${paymentMethod} on ${dateStr}${paymentNotes ? ' (' + paymentNotes + ')' : ''}`;
+    
+    tx.notes = (tx.notes ? tx.notes + ' | ' : '') + logEntry;
+
+    if (!this.pay_later_payments) this.pay_later_payments = [];
+    this.pay_later_payments.push({
+      payment_id: Math.max(0, ...this.pay_later_payments.map(p => Number(p.payment_id) || 0)) + 1,
+      bill_number: Number(billNumber),
+      amount: amt,
+      payment_method: paymentMethod,
+      payment_date: new Date().toISOString(),
+      notes: paymentNotes || ''
+    });
+
+    if (newReceived >= totalFee) {
+      tx.status = 'returned'; // Fully cleared & reconciled!
+    } else {
+      tx.status = 'pay_later'; // Still partially pending
+    }
 
     this.saveToSqlFile();
     return tx;

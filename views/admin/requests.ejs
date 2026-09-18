@@ -37,21 +37,121 @@
                     <div class="nav flex-column">
                         <% if (user.role === 'super_admin') { %>
                             <a href="/views/admin/sahome.php" class="luxury-nav-link"><i class="fa-solid fa-gauge"></i>Dashboard</a>
-                            <a href="/views/admin/inventory.php" class="luxury-nav-link"><i class="fa-solid fa-boxes-stacked"></i>Inventory</a>
-                            <a href="/views/admin/requests_qty.php" class="luxury-nav-link <%= pageType === 'quantity' ? 'active' : '' %>"><i class="fa-solid fa-cubes-stacked"></i>Qty Requests <% if (counts && counts.pendingQty > 0) { %><span class="badge bg-warning text-dark ms-auto"><%= counts.pendingQty %></span><% } %></a>
-                            <a href="/views/admin/requests_rate.php" class="luxury-nav-link <%= pageType === 'daily_rate' ? 'active' : '' %>"><i class="fa-solid fa-tags"></i>Rate Requests <% if (counts && counts.pendingRate > 0) { %><span class="badge bg-info ms-auto"><%= counts.pendingRate %></span><% } %></a>
-                            <a href="/views/admin/requests_cost.php" class="luxury-nav-link <%= pageType === 'cost_price' ? 'active' : '' %>"><i class="fa-solid fa-key"></i>Cost Requests <% if (counts && counts.pendingCost > 0) { %><span class="badge bg-secondary ms-auto"><%= counts.pendingCost %></span><% } %></a>
+                            
+                            <!-- Rentals Dropdown -->
+                            <a href="#saRentalsSubmenu" data-bs-toggle="collapse" class="luxury-nav-link collapsed d-flex align-items-center" role="button" aria-expanded="false">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>Rentals</span>
+                                <i class="fa-solid fa-chevron-down nav-arrow"></i>
+                            </a>
+                            <div class="collapse luxury-submenu" id="saRentalsSubmenu">
+                                <a href="/views/pos/rent.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-cart-flatbed"></i> Rental Terminal
+                                </a>
+                                <a href="/views/pos/return_items.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-rotate-left"></i> Item Return Desk
+                                </a>
+                                <a href="/views/pos/pay_later.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-hand-holding-dollar"></i> Pay Later
+                                </a>
+                            </div>
+
+                            <!-- Inventory Dropdown -->
+                            <a href="#saInventorySubmenu" data-bs-toggle="collapse" class="luxury-nav-link active d-flex align-items-center" role="button" aria-expanded="true">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                                <span>Inventory</span>
+                                <% 
+                                    const saTotalPendingInv = counts ? (counts.pendingQty + counts.pendingRate + counts.pendingCost) : 0;
+                                    if (saTotalPendingInv > 0) { 
+                                %>
+                                    <span class="badge bg-warning text-dark rounded-pill ms-2" style="font-size: 0.65rem;"><%= saTotalPendingInv %></span>
+                                <% } %>
+                                <i class="fa-solid fa-chevron-down nav-arrow"></i>
+                            </a>
+                            <div class="collapse show luxury-submenu" id="saInventorySubmenu">
+                                <a href="/views/admin/inventory.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-warehouse"></i> Stock Inventory
+                                </a>
+                                <a href="/views/admin/requests_qty.php" class="luxury-sub-link d-flex align-items-center justify-content-between <%= pageType === 'quantity' ? 'active' : '' %>">
+                                    <span><i class="fa-solid fa-cubes-stacked"></i> Qty Requests</span>
+                                    <% if (counts && counts.pendingQty > 0) { %>
+                                        <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size: 0.62rem;"><%= counts.pendingQty %></span>
+                                    <% } %>
+                                </a>
+                                <a href="/views/admin/requests_rate.php" class="luxury-sub-link d-flex align-items-center justify-content-between <%= pageType === 'daily_rate' ? 'active' : '' %>">
+                                    <span><i class="fa-solid fa-tags"></i> Rate Requests</span>
+                                    <% if (counts && counts.pendingRate > 0) { %>
+                                        <span class="badge bg-info text-white rounded-pill ms-1" style="font-size: 0.62rem;"><%= counts.pendingRate %></span>
+                                    <% } %>
+                                </a>
+                                <a href="/views/admin/requests_cost.php" class="luxury-sub-link d-flex align-items-center justify-content-between <%= pageType === 'cost_price' ? 'active' : '' %>">
+                                    <span><i class="fa-solid fa-key"></i> Cost Requests</span>
+                                    <% if (counts && counts.pendingCost > 0) { %>
+                                        <span class="badge bg-secondary text-white rounded-pill ms-1" style="font-size: 0.62rem;"><%= counts.pendingCost %></span>
+                                    <% } %>
+                                </a>
+                            </div>
+
                             <a href="/views/admin/inventory_stats.php" class="luxury-nav-link"><i class="fa-solid fa-chart-pie"></i>Inventory Stats</a>
                             <a href="/views/admin/sessions_report.php" class="luxury-nav-link"><i class="fa-solid fa-calendar-day"></i>Day Sessions</a>
                             <a href="/views/admin/reports.php" class="luxury-nav-link"><i class="fa-solid fa-file-invoice-dollar"></i>Reports</a>
                         <% } else { %>
                             <a href="/views/admin/home.php" class="luxury-nav-link"><i class="fa-solid fa-gauge"></i>Dashboard</a>
                             <a href="/views/pos/sell.php" class="luxury-nav-link"><i class="fa-solid fa-cart-shopping"></i>Selling</a>
-                            <a href="/views/pos/rent.php" class="luxury-nav-link"><i class="fa-solid fa-clock-rotate-left"></i>POS</a>
-                            <a href="/views/admin/inventory.php" class="luxury-nav-link"><i class="fa-solid fa-box"></i>Inventory</a>
-                            <a href="/views/admin/requests_qty.php" class="luxury-nav-link <%= pageType === 'quantity' ? 'active' : '' %>"><i class="fa-solid fa-cubes-stacked"></i>Qty Requests <% if (counts && counts.pendingQty > 0) { %><span class="badge bg-warning text-dark ms-auto"><%= counts.pendingQty %></span><% } %></a>
-                            <a href="/views/admin/requests_rate.php" class="luxury-nav-link <%= pageType === 'daily_rate' ? 'active' : '' %>"><i class="fa-solid fa-tags"></i>Rate Requests <% if (counts && counts.pendingRate > 0) { %><span class="badge bg-info ms-auto"><%= counts.pendingRate %></span><% } %></a>
-                            <a href="/views/admin/requests_cost.php" class="luxury-nav-link <%= pageType === 'cost_price' ? 'active' : '' %>"><i class="fa-solid fa-key"></i>Cost Requests <% if (counts && counts.pendingCost > 0) { %><span class="badge bg-secondary ms-auto"><%= counts.pendingCost %></span><% } %></a>
+                            
+                            <!-- Rentals Dropdown -->
+                            <a href="#rentalsSubmenu" data-bs-toggle="collapse" class="luxury-nav-link collapsed d-flex align-items-center" role="button" aria-expanded="false">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>Rentals</span>
+                                <i class="fa-solid fa-chevron-down nav-arrow"></i>
+                            </a>
+                            <div class="collapse luxury-submenu" id="rentalsSubmenu">
+                                <a href="/views/pos/rent.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-cart-flatbed"></i> Rental Terminal
+                                </a>
+                                <a href="/views/pos/return_items.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-rotate-left"></i> Item Return Desk
+                                </a>
+                                <a href="/views/pos/pay_later.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-hand-holding-dollar"></i> Pay Later
+                                </a>
+                            </div>
+
+                            <!-- Inventory Dropdown -->
+                            <a href="#inventorySubmenu" data-bs-toggle="collapse" class="luxury-nav-link active d-flex align-items-center" role="button" aria-expanded="true">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                                <span>Inventory</span>
+                                <% 
+                                    const totalPendingInv = counts ? (counts.pendingQty + counts.pendingRate + counts.pendingCost) : 0;
+                                    if (totalPendingInv > 0) { 
+                                %>
+                                    <span class="badge bg-warning text-dark rounded-pill ms-2" style="font-size: 0.65rem;"><%= totalPendingInv %></span>
+                                <% } %>
+                                <i class="fa-solid fa-chevron-down nav-arrow"></i>
+                            </a>
+                            <div class="collapse show luxury-submenu" id="inventorySubmenu">
+                                <a href="/views/admin/inventory.php" class="luxury-sub-link">
+                                    <i class="fa-solid fa-warehouse"></i> Stock Inventory
+                                </a>
+                                <a href="/views/admin/requests_qty.php" class="luxury-sub-link d-flex align-items-center justify-content-between <%= pageType === 'quantity' ? 'active' : '' %>">
+                                    <span><i class="fa-solid fa-cubes-stacked"></i> Qty Requests</span>
+                                    <% if (counts && counts.pendingQty > 0) { %>
+                                        <span class="badge bg-warning text-dark rounded-pill ms-1" style="font-size: 0.62rem;"><%= counts.pendingQty %></span>
+                                    <% } %>
+                                </a>
+                                <a href="/views/admin/requests_rate.php" class="luxury-sub-link d-flex align-items-center justify-content-between <%= pageType === 'daily_rate' ? 'active' : '' %>">
+                                    <span><i class="fa-solid fa-tags"></i> Rate Requests</span>
+                                    <% if (counts && counts.pendingRate > 0) { %>
+                                        <span class="badge bg-info text-white rounded-pill ms-1" style="font-size: 0.62rem;"><%= counts.pendingRate %></span>
+                                    <% } %>
+                                </a>
+                                <a href="/views/admin/requests_cost.php" class="luxury-sub-link d-flex align-items-center justify-content-between <%= pageType === 'cost_price' ? 'active' : '' %>">
+                                    <span><i class="fa-solid fa-key"></i> Cost Requests</span>
+                                    <% if (counts && counts.pendingCost > 0) { %>
+                                        <span class="badge bg-secondary text-white rounded-pill ms-1" style="font-size: 0.62rem;"><%= counts.pendingCost %></span>
+                                    <% } %>
+                                </a>
+                            </div>
                         <% } %>
                         <a href="/logout.php" class="luxury-nav-link logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
                     </div>
@@ -110,8 +210,6 @@
                         <a href="/views/admin/inventory.php" class="btn btn-luxury-outline">
                             <i class="fa-solid fa-boxes-stacked me-1"></i> Inventory
                         </a>
-
-                        <button id="themeToggle" class="theme-toggle-btn">🌙 Dark Mode</button>
                     </div>
                 </div>
 
@@ -555,34 +653,6 @@
         }
         setInterval(updateClock, 1000);
         updateClock();
-
-        // Dark Mode Logic
-        const toggleBtn = document.getElementById('themeToggle');
-        const html = document.documentElement;
-
-        function updateToggleText() {
-            if (html.getAttribute('data-bs-theme') === 'dark') {
-                toggleBtn.innerHTML = '☀️ Light Mode';
-            } else {
-                toggleBtn.innerHTML = '🌙 Dark Mode';
-            }
-        }
-
-        if (localStorage.getItem('theme') === 'dark') {
-            html.setAttribute('data-bs-theme', 'dark');
-            updateToggleText();
-        }
-
-        toggleBtn.addEventListener('click', () => {
-            if (html.getAttribute('data-bs-theme') === 'dark') {
-                html.setAttribute('data-bs-theme', 'light');
-                localStorage.setItem('theme', 'light');
-            } else {
-                html.setAttribute('data-bs-theme', 'dark');
-                localStorage.setItem('theme', 'dark');
-            }
-            updateToggleText();
-        });
 
         // Current Value Preview in Modal
         function updateCurrentValuePreview() {

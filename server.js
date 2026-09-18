@@ -1163,36 +1163,72 @@ app.get('/views/pos/return_items.php', requireAuth, (req, res) => {
   const searchFilter = String(req.query.search || '').toLowerCase().trim();
 
   let rentals = db.transactions.filter(t => t.type === 'renting' && t.status === 'ongoing');
+  let payLaterTxs = db.transactions.filter(t => t.type === 'renting' && t.status === 'pay_later');
 
   if (dateFilter !== 'all') {
-    rentals = rentals.filter(t => t.transaction_date.startsWith(dateFilter));
-  }
-
-  if (searchFilter) {
-    rentals = rentals.filter(t => {
-      const customer = t.customer_nic ? db.customers.find(c => c.nic_number === t.customer_nic) : null;
-      const cName = customer ? customer.full_name.toLowerCase() : '';
-      const cNic = (t.customer_nic || '').toLowerCase();
-      const cPhone = customer ? customer.phone_number.toLowerCase() : '';
-      const notes = (t.notes || '').toLowerCase();
-
-      return cName.includes(searchFilter) || cNic.includes(searchFilter) || cPhone.includes(searchFilter) || notes.includes(searchFilter);
-    });
+    rentals = rentals.filter(t => t.transaction_date && t.transaction_date.startsWith(dateFilter));
+    payLaterTxs = payLaterTxs.filter(t => t.transaction_date && t.transaction_date.startsWith(dateFilter));
   }
 
   const populatedRentals = rentals.map(r => {
-    const customer = r.customer_nic ? db.customers.find(c => c.nic_number === r.customer_nic) : null;
+    const fullTx = db.getTransaction(r.bill_number);
+    const customer = (fullTx && fullTx.customer) ? fullTx.customer : (r.customer_nic ? db.customers.find(c => c.nic_number === r.customer_nic) : null);
     return {
-      ...r,
+      ...(fullTx || r),
       c_name: customer ? customer.full_name : 'Walk-in Customer',
       c_phone: customer ? customer.phone_number : ''
     };
   }).sort((a, b) => b.bill_number - a.bill_number);
 
+  const populatedPayLater = payLaterTxs.map(p => {
+    const fullTx = db.getTransaction(p.bill_number);
+    const customer = (fullTx && fullTx.customer) ? fullTx.customer : (p.customer_nic ? db.customers.find(c => c.nic_number === p.customer_nic) : null);
+    const totalCharge = Number(p.total_lkr || 0);
+    const totalReceived = Number(p.received_amount || 0);
+    const pendingDue = Math.max(0, totalCharge - totalReceived);
+    return {
+      ...(fullTx || p),
+      c_name: customer ? customer.full_name : 'Walk-in Customer',
+      c_phone: customer ? customer.phone_number : '',
+      c_nic: p.customer_nic || '',
+      pending_due: pendingDue,
+      paid_so_far: totalReceived
+    };
+  }).sort((a, b) => b.bill_number - a.bill_number);
+
+  let filteredRentals = populatedRentals;
+  let matchingPayLater = [];
+
+  if (searchFilter) {
+    const cleanSearch = searchFilter.replace(/^#/, '').toLowerCase().trim();
+    filteredRentals = populatedRentals.filter(r => {
+      const cName = String(r.c_name || '').toLowerCase();
+      const cNic = String(r.customer_nic || '').toLowerCase();
+      const cPhone = String(r.c_phone || '').toLowerCase();
+      const notes = String(r.notes || '').toLowerCase();
+      const billStr = String(r.bill_number);
+
+      return billStr === cleanSearch || billStr.includes(cleanSearch) || cName.includes(cleanSearch) || cNic.includes(cleanSearch) || cPhone.includes(cleanSearch) || notes.includes(cleanSearch);
+    });
+
+    matchingPayLater = populatedPayLater.filter(p => {
+      const cName = String(p.c_name || '').toLowerCase();
+      const cNic = String(p.customer_nic || p.c_nic || '').toLowerCase();
+      const cPhone = String(p.c_phone || '').toLowerCase();
+      const notes = String(p.notes || '').toLowerCase();
+      const billStr = String(p.bill_number);
+
+      return billStr === cleanSearch || billStr.includes(cleanSearch) || cName.includes(cleanSearch) || cNic.includes(cleanSearch) || cPhone.includes(cleanSearch) || notes.includes(cleanSearch);
+    });
+  }
+
   res.render('pos/return_items', {
-    rentals: populatedRentals,
+    rentals: filteredRentals,
+    payLaterBills: matchingPayLater,
+    allPayLaterTotal: populatedPayLater.length,
     dateFilter,
-    searchFilter: req.query.search || ''
+    searchFilter: req.query.search || '',
+    paymentSuccess: req.query.payment_success || null
   });
 });
 
@@ -1234,7 +1270,7 @@ app.get('/views/pos/return_checkout.php', requireAuth, (req, res) => {
     items,
     defaultDays,
     totalHardwareValue,
-    msg: trans.status === 'returned' ? "<div class='alert alert-warning shadow-sm rounded-3 mt-3'><i class='fa-solid fa-triangle-exclamation me-2'></i>This rental has already been returned and closed.</div>" : ''
+    msg: (trans.status === 'returned' || trans.status === 'pay_later') ? "<div class='alert alert-warning shadow-sm rounded-3 mt-3'><i class='fa-solid fa-triangle-exclamation me-2'></i>This rental has already been checked in (Status: " + trans.status + ").</div>" : ''
   });
 });
 
@@ -1242,9 +1278,137 @@ app.post('/views/pos/return_checkout.php', requireAuth, (req, res) => {
   const billId = Number(req.query.bill_id || req.body.bill_id);
   const cashReceived = parseFloat(req.body.cash_received) || 0;
   const daysPerItem = req.body.days || {};
+  const discount = parseFloat(req.body.discount) || 0;
+  const isPayLater = req.body.is_pay_later === '1' || req.body.is_pay_later === 'true' || req.body.is_pay_later === 'on' || req.body.action_type === 'pay_later';
+  const dueDate = req.body.pay_later_due_date || '';
+  const payLaterNotes = req.body.pay_later_notes || '';
 
-  db.processRentalReturn(billId, daysPerItem, cashReceived);
+  db.processRentalReturn(billId, daysPerItem, cashReceived, {
+    discount,
+    isPayLater,
+    dueDate,
+    payLaterNotes
+  });
+
+  if (isPayLater) {
+    return res.redirect(`/views/pos/print_bill.php?type=thermal_pay_later&bill_id=${billId}`);
+  }
   res.redirect(`/views/pos/print_bill.php?type=a4&bill_id=${billId}`);
+});
+
+// Dedicated Pay Later Directory
+app.get('/views/pos/pay_later.php', requireAuth, (req, res) => {
+  const dateFilter = req.query.date || 'all';
+  const rawSearch = String(req.query.search || '').trim();
+  const rawBill = String(req.query.bill_no || '').trim();
+  const cleanSearch = rawSearch.replace(/^#/, '').toLowerCase().trim();
+  const cleanBill = rawBill.replace(/^#/, '').toLowerCase().trim();
+  const statusFilter = req.query.status || 'pending'; // 'pending', 'settled', 'all'
+
+  // Retrieve transactions that are either active pay_later or have pay_later history
+  let allPayLater = db.transactions.filter(t => t.type === 'renting' && (t.status === 'pay_later' || (t.notes && t.notes.includes('Pay Later'))));
+
+  if (dateFilter !== 'all') {
+    allPayLater = allPayLater.filter(t => t.transaction_date && t.transaction_date.startsWith(dateFilter));
+  }
+
+  const populated = allPayLater.map(p => {
+    const fullTx = db.getTransaction(p.bill_number);
+    const customer = (fullTx && fullTx.customer) ? fullTx.customer : (p.customer_nic ? db.customers.find(c => c.nic_number === p.customer_nic) : null);
+    const totalCharge = Number(p.total_lkr || 0);
+    const totalReceived = Number(p.received_amount || 0);
+    const pendingDue = Math.max(0, totalCharge - totalReceived);
+    const isSettled = pendingDue <= 0.001 || p.status === 'returned';
+
+    return {
+      ...(fullTx || p),
+      c_name: customer ? customer.full_name : 'Walk-in Customer',
+      c_phone: customer ? customer.phone_number : '',
+      c_nic: p.customer_nic || '',
+      c_address: customer ? customer.address : '',
+      total_charge: totalCharge,
+      advance_paid: Number(p.advance_paid || 0),
+      total_paid: totalReceived,
+      pending_due: pendingDue,
+      is_settled: isSettled
+    };
+  }).sort((a, b) => b.bill_number - a.bill_number);
+
+  // Apply Status Filter
+  let filtered = populated;
+  if (statusFilter === 'pending') {
+    filtered = populated.filter(p => !p.is_settled);
+  } else if (statusFilter === 'settled') {
+    filtered = populated.filter(p => p.is_settled);
+  }
+
+  // Apply Dedicated Unique Bill ID Filter (e.g. #12345 or 12345)
+  if (cleanBill) {
+    filtered = filtered.filter(p => {
+      const billStr = String(p.bill_number);
+      return billStr === cleanBill || billStr.includes(cleanBill);
+    });
+  }
+
+  // Apply General Search Filter (Supports #12345, customer name, NIC, phone)
+  if (cleanSearch) {
+    filtered = filtered.filter(p => {
+      const cName = String(p.c_name || '').toLowerCase();
+      const cNic = String(p.c_nic || '').toLowerCase();
+      const cPhone = String(p.c_phone || '').toLowerCase();
+      const notes = String(p.notes || '').toLowerCase();
+      const billStr = String(p.bill_number);
+
+      return billStr === cleanSearch || billStr.includes(cleanSearch) || cName.includes(cleanSearch) || cNic.includes(cleanSearch) || cPhone.includes(cleanSearch) || notes.includes(cleanSearch);
+    });
+  }
+
+  const totalOutstanding = populated.filter(p => !p.is_settled).reduce((sum, p) => sum + p.pending_due, 0);
+  const pendingCount = populated.filter(p => !p.is_settled).length;
+  const settledCount = populated.filter(p => p.is_settled).length;
+
+  res.render('pos/pay_later', {
+    bills: filtered,
+    totalOutstanding,
+    pendingCount,
+    settledCount,
+    totalCount: populated.length,
+    statusFilter,
+    dateFilter,
+    searchFilter: rawSearch,
+    billFilter: rawBill,
+    paymentSuccess: req.query.payment_success || null,
+    paidBillId: req.query.bill_id || null,
+    paidAmount: req.query.paid || null,
+    returnedPayLater: req.query.pay_later || null
+  });
+});
+
+// Process Pay Later Settlement Collection
+app.post('/views/pos/pay_later_settle.php', requireAuth, (req, res) => {
+  const billId = Number(req.body.bill_id);
+  const paymentAmount = parseFloat(req.body.payment_amount) || 0;
+  const paymentMethod = req.body.payment_method || 'Cash';
+  const paymentNotes = req.body.payment_notes || '';
+  const redirectTo = req.body.redirect_to || '';
+
+  let updatedTx = null;
+  if (billId && paymentAmount > 0) {
+    updatedTx = db.recordPayLaterPayment(billId, paymentAmount, paymentMethod, paymentNotes);
+  } else {
+    updatedTx = db.getTransaction(billId);
+  }
+
+  const isFullyPaid = updatedTx ? (Number(updatedTx.received_amount || 0) >= Number(updatedTx.total_lkr || 0)) : false;
+
+  // If redirect specifically requested (and not A4 print), redirect there
+  if (redirectTo && !redirectTo.includes('print_bill')) {
+    const separator = redirectTo.includes('?') ? '&' : '?';
+    return res.redirect(`${redirectTo}${separator}payment_success=1&bill_id=${billId}&paid=${paymentAmount}&paid_all=${isFullyPaid ? 1 : 0}`);
+  }
+
+  // Open A4 bill in new page with full details; if fully paid, auto-print triggers
+  return res.redirect(`/views/pos/print_bill.php?type=a4&bill_id=${billId}&payment_success=1&paid=${paymentAmount}&paid_all=${isFullyPaid ? 1 : 0}`);
 });
 
 // -------------------------------------------------------------
@@ -1263,13 +1427,23 @@ app.get('/views/pos/print_bill.php', requireAuth, (req, res) => {
   const d = new Date(txn.transaction_date);
   const dateFormatted = d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 
+  const totalCharge = Number(txn.total_lkr || 0);
+  const totalReceived = Number(txn.received_amount || 0);
+  const pendingDue = Math.max(0, totalCharge - totalReceived);
+  const paidAll = req.query.paid_all === '1' || (req.query.payment_success === '1' && pendingDue <= 0.001);
+
   res.render('pos/print_bill', {
     txn,
     customer,
     items: txn.items,
     type,
     billId,
-    dateFormatted
+    dateFormatted,
+    pendingDue,
+    paidAll,
+    paymentSuccess: req.query.payment_success || null,
+    paidAmount: req.query.paid || null,
+    collect: req.query.collect || null
   });
 });
 
