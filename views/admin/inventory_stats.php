@@ -1,11 +1,70 @@
+<?php
+session_start();
+include_once __DIR__ . '/../../db.php';
+
+// SECURITY: Only allow Super Admin
+if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'super_admin') {
+    header("Location: ../../index.php");
+    exit();
+}
+
+// 1. Fetch Revenue Data (Last 7 Days)
+$revenue_labels = [];
+$revenue_data = [];
+
+for ($i = 6; $i >= 0; $i--) {
+    $date = date('Y-m-d', strtotime("-$i days"));
+    $revenue_labels[] = date('M d', strtotime($date));
+    
+    $start = $date . ' 00:00:00';
+    $end = $date . ' 23:59:59';
+    
+    $q = "SELECT SUM(received_amount - balance_amount) as daily_total FROM transactions WHERE transaction_date BETWEEN ? AND ? AND status != 'cancelled'";
+    $stmt = $conn->prepare($q);
+    $stmt->bind_param("ss", $start, $end);
+    $stmt->execute();
+    $res = $stmt->get_result()->fetch_assoc();
+    
+    $revenue_data[] = $res['daily_total'] ? (float)$res['daily_total'] : 0;
+}
+
+// 2. Fetch Stocks and Sales Data for Items
+$item_labels = [];
+$stock_data = [];
+$sales_data = [];
+
+// Get all items and their sold quantities
+$items_q = "
+    SELECT 
+        i.item_id, 
+        i.item_name, 
+        i.stock_quantity,
+        COALESCE(SUM(ti.quantity), 0) as total_sold
+    FROM inventory i
+    LEFT JOIN transaction_items ti ON i.item_id = ti.item_id
+    GROUP BY i.item_id, i.item_name, i.stock_quantity
+    ORDER BY i.item_id ASC
+";
+$items_res = $conn->query($items_q);
+
+while ($row = $items_res->fetch_assoc()) {
+    // Truncate long names for chart labels
+    $name = strlen($row['item_name']) > 15 ? substr($row['item_name'], 0, 15) . '...' : $row['item_name'];
+    $item_labels[] = $name;
+    $stock_data[] = (int)$row['stock_quantity'];
+    $sales_data[] = (int)$row['total_sold'];
+}
+
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCATS | Inventory Analytics</title>
-    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
-    <!-- Instant theme apply — prevents flash -->
+    <link rel="icon" type="image/x-icon" href="../../img/ico.ico">
+    <!-- Instant theme apply - prevents flash -->
     <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'light');</script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Bootstrap 5 CSS -->
@@ -13,7 +72,7 @@
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Luxury Executive Design System -->
-    <link rel="stylesheet" href="/css/luxury.css">
+    <link rel="stylesheet" href="../../css/luxury.css">
     <style>
         canvas { width: 100% !important; height: 350px !important; }
     </style>
@@ -34,56 +93,17 @@
             <nav id="sidebarMenu" class="col-md-3 col-lg-2 d-md-block luxury-sidebar offcanvas-md offcanvas-start">
                 <div class="position-sticky pt-3 px-3">
                     <div class="d-none d-md-block mb-4 text-center pb-3 border-bottom" style="border-color: var(--obsidian-border) !important;">
-                        <img src="/img/logo.png" style="width: 70px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));" class="mb-2" alt="MCATS Logo">
+                        <img src="../../img/logo.png" style="width: 70px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.5));" class="mb-2" alt="MCATS Logo">
                         <h4 class="luxury-brand-title m-0">MCATS SA</h4>
                         <small class="text-white-50" style="font-size: 0.725rem; letter-spacing: 0.1em;">EXECUTIVE CONTROL</small>
                     </div>
                     <div class="nav flex-column">
-                        <a href="/views/admin/sahome.php" class="luxury-nav-link"><i class="fa-solid fa-gauge"></i>Dashboard</a>
-                        
-                        <!-- Rentals Dropdown -->
-                        <a href="#statsRentalsSubmenu" data-bs-toggle="collapse" class="luxury-nav-link collapsed d-flex align-items-center" role="button" aria-expanded="false">
-                            <i class="fa-solid fa-clock-rotate-left"></i>
-                            <span>Rentals</span>
-                            <i class="fa-solid fa-chevron-down nav-arrow"></i>
-                        </a>
-                        <div class="collapse luxury-submenu" id="statsRentalsSubmenu">
-                            <a href="/views/pos/rent.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-cart-flatbed"></i> Rental Terminal
-                            </a>
-                            <a href="/views/pos/return_items.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-rotate-left"></i> Item Return Desk
-                            </a>
-                            <a href="/views/pos/pay_later.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-hand-holding-dollar"></i> Pay Later
-                            </a>
-                        </div>
-
-                        <!-- Inventory Dropdown -->
-                        <a href="#statsInventorySubmenu" data-bs-toggle="collapse" class="luxury-nav-link collapsed d-flex align-items-center" role="button" aria-expanded="false">
-                            <i class="fa-solid fa-boxes-stacked"></i>
-                            <span>Inventory</span>
-                            <i class="fa-solid fa-chevron-down nav-arrow"></i>
-                        </a>
-                        <div class="collapse luxury-submenu" id="statsInventorySubmenu">
-                            <a href="/views/admin/inventory.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-warehouse"></i> Stock Inventory
-                            </a>
-                            <a href="/views/admin/requests_qty.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-cubes-stacked"></i> Qty Requests
-                            </a>
-                            <a href="/views/admin/requests_rate.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-tags"></i> Rate Requests
-                            </a>
-                            <a href="/views/admin/requests_cost.php" class="luxury-sub-link">
-                                <i class="fa-solid fa-key"></i> Cost Requests
-                            </a>
-                        </div>
-
-                        <a href="/views/admin/inventory_stats.php" class="luxury-nav-link active"><i class="fa-solid fa-chart-pie"></i>Inventory Stats</a>
-                        <a href="/views/admin/sessions_report.php" class="luxury-nav-link"><i class="fa-solid fa-calendar-day"></i>Day Sessions</a>
-                        <a href="/views/admin/reports.php" class="luxury-nav-link"><i class="fa-solid fa-file-invoice-dollar"></i>Reports</a>
-                        <a href="/logout.php" class="luxury-nav-link logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
+                        <a href="sahome.php" class="luxury-nav-link"><i class="fa-solid fa-gauge"></i>Dashboard</a>
+                        <a href="requests.php" class="luxury-nav-link"><i class="fa-solid fa-shield-halved"></i>Requests Hub</a>
+                        <a href="inventory_stats.php" class="luxury-nav-link active"><i class="fa-solid fa-chart-pie"></i>Analytics</a>
+                        <a href="reports.php" class="luxury-nav-link"><i class="fa-solid fa-file-invoice-dollar"></i>Reports</a>
+                        <a href="manage_user.php?action=add" class="luxury-nav-link"><i class="fa-solid fa-users-gear"></i>User Accounts</a>
+                        <a href="../../logout.php" class="luxury-nav-link logout"><i class="fa-solid fa-right-from-bracket"></i>Logout</a>
                     </div>
                 </div>
             </nav>
@@ -99,9 +119,10 @@
                         <p class="text-muted small mb-0 mt-1">Visualize revenue trends, stock balance, and sales velocity</p>
                     </div>
                     <div class="d-flex align-items-center gap-3 mt-3 mt-md-0">
-                        <a href="/views/admin/sahome.php" class="btn btn-luxury-outline">
+                        <a href="sahome.php" class="btn btn-luxury-outline">
                             <i class="fa-solid fa-arrow-left me-1"></i> Dashboard
                         </a>
+                        <button id="themeToggle" class="theme-toggle-btn"><i class="fa-solid fa-moon me-1"></i> Dark Mode</button>
                     </div>
                 </div>
 
@@ -155,6 +176,8 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Theme Toggle
+        const toggleBtn = document.getElementById('themeToggle');
         const html = document.documentElement;
         
         let chartLineColor = 'rgba(15, 23, 42, 0.08)';
@@ -176,15 +199,41 @@
             Chart.defaults.scale.grid.borderColor = chartLineColor;
         }
 
+        function updateToggleText() {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                toggleBtn.innerHTML = '<i class="fa-solid fa-sun text-warning me-1"></i> Light Mode';
+            } else {
+                toggleBtn.innerHTML = '<i class="fa-solid fa-moon text-info me-1"></i> Dark Mode';
+            }
+        }
+
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            updateToggleText();
+        }
+
         applyChartTheme();
 
-        // Chart Data from Server
-        const revLabels = <%- JSON.stringify(revenueLabels) %>;
-        const revData = <%- JSON.stringify(revenueData) %>;
+        toggleBtn.addEventListener('click', () => {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                html.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+            }
+            updateToggleText();
+            applyChartTheme();
+            renderCharts();
+        });
 
-        const itemLabels = <%- JSON.stringify(itemLabels) %>;
-        const stockData = <%- JSON.stringify(stockData) %>;
-        const salesData = <%- JSON.stringify(salesData) %>;
+        // Chart Data from PHP
+        const revLabels = <?php echo json_encode($revenue_labels); ?>;
+        const revData = <?php echo json_encode($revenue_data); ?>;
+
+        const itemLabels = <?php echo json_encode($item_labels); ?>;
+        const stockData = <?php echo json_encode($stock_data); ?>;
+        const salesData = <?php echo json_encode($sales_data); ?>;
 
         let myRevChart = null;
         let myStockChart = null;

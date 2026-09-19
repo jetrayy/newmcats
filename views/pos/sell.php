@@ -1,10 +1,106 @@
+<?php
+session_start();
+include_once __DIR__ . '/../../db.php';
+
+// Security: Allow admin or super_admin
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../../index.php");
+    exit();
+}
+
+$error_msg = "";
+$success_msg = "";
+
+// Check for active session
+$active_session_query = $conn->query("SELECT id FROM cash_sessions WHERE status='open' AND DATE(opened_at) = CURDATE() ORDER BY id DESC LIMIT 1");
+$active_session = $active_session_query->fetch_assoc();
+if (!$active_session) {
+    echo "<script>alert('No active day session! Please start a session from the Admin Dashboard first.'); window.location.href='../admin/home.php';</script>";
+    exit();
+}
+$session_id = $active_session['id'];
+
+// Handle Checkout
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['checkout'])) {
+    $cart_data = json_decode($_POST['cart_data'], true);
+    
+    if (empty($cart_data)) {
+        $error_msg = "Cart is empty!";
+    } else {
+        // Calculate gross subtotal
+        $subtotal_lkr = 0;
+        foreach ($cart_data as $item) {
+            $subtotal_lkr += (floatval($item['price']) * intval($item['qty']));
+        }
+
+        // Process discount
+        $raw_disc_type = strtolower(trim($_POST['discount_type'] ?? 'none'));
+        $discount_type = in_array($raw_disc_type, ['percentage', 'fixed']) ? $raw_disc_type : 'none';
+        $discount_value = floatval($_POST['discount_value'] ?? 0);
+        if ($discount_value < 0) $discount_value = 0;
+
+        $discount_amount = 0;
+        if ($discount_type === 'percentage') {
+            if ($discount_value > 100) $discount_value = 100;
+            $discount_amount = round($subtotal_lkr * ($discount_value / 100), 2);
+        } elseif ($discount_type === 'fixed') {
+            $discount_amount = min($subtotal_lkr, $discount_value);
+        } else {
+            $discount_value = 0;
+            $discount_amount = 0;
+        }
+
+        $net_total_lkr = max(0, $subtotal_lkr - $discount_amount);
+        $received_amount = (isset($_POST['received_amount']) && $_POST['received_amount'] !== '') ? floatval($_POST['received_amount']) : $net_total_lkr;
+        $balance_amount = $received_amount - $net_total_lkr;
+        $free_eq_text = (isset($_POST['free_eq']) && $_POST['free_eq'] === 'yes') ? (trim($_POST['free_eq_desc']) ?: 'Included Free Equipment') : null;
+
+        $conn->begin_transaction();
+        try {
+            // Insert Transaction
+            $stmt = $conn->prepare("INSERT INTO transactions (session_id, type, subtotal_lkr, discount_type, discount_value, discount_amount, total_lkr, received_amount, balance_amount, free_equipment, status) VALUES (?, 'selling', ?, ?, ?, ?, ?, ?, ?, ?, 'completed')");
+            $stmt->bind_param("isdddddds", $session_id, $subtotal_lkr, $discount_type, $discount_value, $discount_amount, $net_total_lkr, $received_amount, $balance_amount, $free_eq_text);
+            $stmt->execute();
+            $bill_number = $stmt->insert_id;
+            
+            // Insert Items & Deduct Stock
+            $item_stmt = $conn->prepare("INSERT INTO transaction_items (bill_number, item_id, quantity, unit_price) VALUES (?, ?, ?, ?)");
+            $stock_stmt = $conn->prepare("UPDATE inventory SET stock_quantity = GREATEST(0, stock_quantity - ?) WHERE item_id = ?");
+            
+            foreach ($cart_data as $item) {
+                $item_id = intval($item['id']);
+                $qty = intval($item['qty']);
+                $price = floatval($item['price']);
+                
+                $item_stmt->bind_param("iiid", $bill_number, $item_id, $qty, $price);
+                $item_stmt->execute();
+
+                $stock_stmt->bind_param("ii", $qty, $item_id);
+                $stock_stmt->execute();
+            }
+            
+            $conn->commit();
+            // Redirect to print thermal invoice
+            header("Location: print_bill.php?type=thermal&bill_id=$bill_number");
+            exit();
+        } catch (Exception $e) {
+            $conn->rollback();
+            $error_msg = "Error processing checkout: " . $e->getMessage();
+        }
+    }
+}
+
+// Fetch Saleable Inventory
+$items_query = "SELECT * FROM inventory WHERE category != 'Rental Items' ORDER BY item_id DESC";
+$items_result = @$conn->query($items_query);
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCATS | Retail Selling Terminal</title>
-    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
+    <title>MCATS | Selling POS</title>
+    <link rel="icon" type="image/x-icon" href="../../img/ico.ico">
     <!-- Instant theme apply — prevents flash -->
     <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'light');</script>
     <!-- Google Fonts -->
@@ -16,7 +112,7 @@
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Luxury Core CSS -->
-    <link rel="stylesheet" href="/css/luxury.css">
+    <link rel="stylesheet" href="../../css/luxury.css">
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--luxury-body-bg); overflow-x: hidden; }
         .product-card {
@@ -49,18 +145,16 @@
             transform: scale(1.06);
         }
         .cart-section {
-            height: 100vh;
-            overflow-y: auto;
+            min-height: calc(100vh - 56px);
             background: var(--luxury-card-bg);
             border-left: 1px solid var(--luxury-card-border);
             box-shadow: -8px 0 25px rgba(0, 0, 0, 0.04);
             position: sticky;
-            top: 0;
+            top: 56px;
             z-index: 20;
         }
         .products-section {
-            height: 100vh;
-            overflow-y: auto;
+            min-height: calc(100vh - 56px);
         }
         .luxury-search {
             border-radius: var(--radius-full);
@@ -74,8 +168,8 @@
             box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.18);
         }
         .fly-item {
-            position: fixed;
-            z-index: 1060;
+            position: absolute;
+            z-index: 1050;
             transition: all 0.6s cubic-bezier(0.25, 0.8, 0.25, 1);
             pointer-events: none;
             border-radius: 50%;
@@ -88,74 +182,33 @@
             transition: all 0.2s ease;
         }
         .cart-item-row:hover {
-            border-color: rgba(212, 175, 55, 0.45);
-            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-        }
-        .cart-qty-btn {
-            width: 36px;
-            height: 36px;
-            min-width: 36px;
-            min-height: 36px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0;
-            font-size: 1rem;
-            font-weight: bold;
-            transition: all 0.15s ease;
-            touch-action: manipulation;
-        }
-        .cart-qty-input {
-            width: 48px;
-            height: 36px;
-            font-size: 0.95rem;
-            font-weight: 700;
-            text-align: center;
-            padding: 0;
-            touch-action: manipulation;
+            border-color: rgba(212, 175, 55, 0.35);
         }
         .mobile-floating-cart {
             position: fixed;
-            bottom: 16px;
-            left: 16px;
-            right: 16px;
+            bottom: 12px;
+            left: 12px;
+            right: 12px;
             z-index: 1040;
-            background: var(--luxury-card-bg);
+            background: #0f172a;
             border: 1.5px solid var(--gold-primary);
-            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4);
-            border-radius: var(--radius-full);
-            padding: 0.75rem 1.25rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+            border-radius: 16px;
+            padding: 10px 16px;
             display: none;
             align-items: center;
             justify-content: space-between;
-            animation: slideUpCart 0.3s ease;
-        }
-        @keyframes slideUpCart {
-            from { transform: translateY(80px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-        #cartItemsContainer::-webkit-scrollbar {
-            width: 6px;
-        }
-        #cartItemsContainer::-webkit-scrollbar-thumb {
-            background: rgba(212, 175, 55, 0.35);
-            border-radius: 4px;
         }
         @media (max-width: 991.98px) {
-            .products-section, .cart-section { height: auto; position: static; overflow-y: visible; }
-            .cart-section { border-left: none; border-top: 1px solid var(--luxury-card-border); padding-bottom: 110px; }
-            .product-card {
-                cursor: pointer;
-                touch-action: manipulation;
-            }
-            .add-to-cart-btn {
-                min-height: 38px;
-                touch-action: manipulation;
-            }
+            .products-section, .cart-section { height: auto; position: static; }
+            .cart-section { border-left: none; border-top: 1px solid var(--luxury-card-border); padding-bottom: 90px; }
         }
     </style>
 </head>
 <body>
+
+    <!-- Global Navigation Bar -->
+    <?php include_once __DIR__ . '/../includes/navbar.php'; ?>
 
     <div class="container-fluid p-0">
         <div class="row g-0">
@@ -166,7 +219,7 @@
                     <div>
                         <div class="d-flex align-items-center gap-2 mb-1">
                             <span class="badge text-uppercase" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-size: 0.72rem; letter-spacing: 0.1em; font-weight: 700;">Retail Channel</span>
-                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 small px-2 py-0.5">Session #<%= sessionId %> Active</span>
+                            <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 small px-2 py-0.5">Session #<?php echo $session_id; ?> Active</span>
                         </div>
                         <h2 class="mb-0 fw-bold d-flex align-items-center gap-2" style="font-family: 'Outfit', sans-serif;">
                             <i class="fa-solid fa-bag-shopping" style="color: var(--gold-primary);"></i>
@@ -175,19 +228,20 @@
                         <div id="realtimeClock" class="text-secondary small mt-1"></div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <!-- Mobile Fast Order Button -->
-                        <a href="#cartSection" onclick="scrollToCart(); return false;" class="btn btn-luxury-gold btn-sm rounded-pill px-3 fw-bold d-lg-none d-inline-flex align-items-center gap-1 shadow-sm">
-                            <i class="fa-solid fa-basket-shopping"></i>
-                            <span>Order</span>
-                            <span class="badge bg-danger text-white rounded-pill ms-1" id="mobileHeaderCartCount" style="display: none; font-size: 0.65rem;">0</span>
-                        </a>
-                        <a href="/views/pos/rent.php" class="btn btn-outline-secondary rounded-pill btn-sm shadow-sm px-3 fw-semibold">
-                            <i class="fa-solid fa-clock-rotate-left me-1"></i> Rentals
-                        </a>
-                        <a href="/views/admin/home.php" class="btn btn-outline-secondary rounded-pill btn-sm shadow-sm px-3 fw-semibold">
+                        <button id="themeToggle" class="btn btn-outline-secondary rounded-pill btn-sm d-none d-md-flex align-items-center gap-1 shadow-sm px-3">
+                            <i class="fa-solid fa-moon"></i> <span>Dark Mode</span>
+                        </button>
+                        <a href="../admin/home.php" class="btn btn-outline-secondary rounded-pill btn-sm shadow-sm px-3 fw-semibold">
                             <i class="fa-solid fa-arrow-left me-1"></i> Hub
                         </a>
                     </div>
+                </div>
+
+                <!-- Theme Toggle Mobile -->
+                <div class="d-md-none mb-3">
+                    <button id="themeToggleMobile" class="btn btn-outline-secondary rounded-pill btn-sm w-100">
+                        <i class="fa-solid fa-moon me-1"></i> Toggle Dark/Light Mode
+                    </button>
                 </div>
 
                 <!-- Search Bar -->
@@ -196,81 +250,75 @@
                     <input type="text" id="itemSearch" class="form-control border-0 p-0 shadow-none bg-transparent fs-6" placeholder="Search catalog by item name, SKU, or keyword..." onkeyup="filterItems()">
                 </div>
 
-                <% if (successMsg) { %>
-                    <div class="alert alert-success border-0 shadow-sm rounded-4 d-flex align-items-center gap-2"><i class="fa-solid fa-check-circle"></i><%- successMsg %></div>
-                <% } %>
-                <% if (errorMsg) { %>
-                    <div class="alert alert-danger border-0 shadow-sm rounded-4 d-flex align-items-center gap-2"><i class="fa-solid fa-triangle-exclamation"></i><%= errorMsg %></div>
-                <% } %>
+                <?php if($success_msg): ?>
+                    <div class="alert alert-success border-0 shadow-sm rounded-4 d-flex align-items-center gap-2"><i class="fa-solid fa-check-circle"></i><?php echo $success_msg; ?></div>
+                <?php endif; ?>
+                <?php if($error_msg): ?>
+                    <div class="alert alert-danger border-0 shadow-sm rounded-4 d-flex align-items-center gap-2"><i class="fa-solid fa-triangle-exclamation"></i><?php echo $error_msg; ?></div>
+                <?php endif; ?>
 
                 <!-- Product Catalog Grid -->
                 <div class="row g-3" id="productGrid">
-                    <% if (items && items.length > 0) { %>
-                        <% items.forEach(function(item) { 
-                            const id = item.item_id;
-                            const name = item.item_name || 'Unknown Item';
-                            const price = Number(item.price_per_unit || 0);
-                            const stock = item.stock_quantity || 0;
-                            const img = item.item_image && item.item_image !== 'default.png' && item.item_image !== 'placeholder.jpg' ? '/img/' + item.item_image : '/img/logo.png';
-                        %>
-                        <div class="col-6 col-sm-4 col-md-3 col-xl-2">
-                            <div class="card h-100 product-card" data-id="<%= id %>" data-name="<%= name %>" data-price="<%= price %>" data-stock="<%= stock %>" onclick="handleCardClick('<%= id %>', this)">
-                                <div class="product-img-wrap d-flex align-items-center justify-content-center">
-                                    <img src="<%= img %>" loading="lazy" alt="Product" class="product-img object-fit-contain p-2">
-                                    <span class="position-absolute top-0 start-0 m-2 badge <%= stock > 0 ? 'bg-dark bg-opacity-75 text-white' : 'bg-danger text-white' %>" style="font-size: 0.65rem;">
-                                        <%= stock > 0 ? 'Stock: ' + stock : 'Out of Stock' %>
-                                    </span>
-                                    <span class="position-absolute top-0 end-0 m-2 badge rounded-pill bg-warning text-dark fw-bold border border-warning in-cart-badge d-none" style="font-size: 0.65rem;">
-                                        <i class="fa-solid fa-basket-shopping me-1"></i><span class="badge-qty">0</span>
-                                    </span>
-                                </div>
-                                <div class="card-body p-2 d-flex flex-column justify-content-between text-center">
-                                    <div>
-                                        <h6 class="card-title fw-bold mb-1 text-truncate" title="<%= name %>" style="font-size: 0.86rem;"><%= name %></h6>
-                                        <div class="fw-bold text-nowrap mb-2" style="color: var(--gold-primary); font-size: 0.92rem;">
-                                            Rs. <%= price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+                    <?php 
+                    if($items_result && $items_result->num_rows > 0) {
+                        while($item = $items_result->fetch_assoc()) {
+                            $id = $item['item_id'];
+                            $name = $item['item_name'] ?? 'Unknown Item';
+                            $price = floatval($item['price_per_unit'] ?? 0);
+                            $stock = intval($item['stock_quantity'] ?? 0);
+                            $img = !empty($item['item_image']) && $item['item_image'] !== 'default.png' ? '../../img/' . $item['item_image'] : '../../img/logo.png';
+                            ?>
+                            <div class="col-6 col-sm-4 col-md-3 col-xl-2">
+                                <div class="card h-100 product-card" data-id="<?php echo $id; ?>" data-name="<?php echo htmlspecialchars($name); ?>" data-price="<?php echo $price; ?>" data-stock="<?php echo $stock; ?>" onclick="handleCardClick('<?php echo $id; ?>', this)">
+                                    <div class="product-img-wrap d-flex align-items-center justify-content-center">
+                                        <img src="<?php echo htmlspecialchars($img); ?>" loading="lazy" alt="Product" class="product-img object-fit-contain p-2">
+                                        <span class="position-absolute top-0 start-0 m-2 badge <?php echo $stock > 0 ? 'bg-dark bg-opacity-75 text-white' : 'bg-danger text-white'; ?>" style="font-size: 0.65rem;">
+                                            <?php echo $stock > 0 ? 'Stock: ' . $stock : 'Out of Stock'; ?>
+                                        </span>
+                                        <span class="position-absolute top-0 end-0 m-2 badge rounded-pill bg-warning text-dark fw-bold border border-warning in-cart-badge d-none" style="font-size: 0.65rem;">
+                                            <i class="fa-solid fa-basket-shopping me-1"></i><span class="badge-qty">0</span>
+                                        </span>
+                                    </div>
+                                    <div class="card-body p-2 d-flex flex-column justify-content-between text-center">
+                                        <div>
+                                            <h6 class="card-title fw-bold mb-1 text-truncate" title="<?php echo htmlspecialchars($name); ?>" style="font-size: 0.86rem;"><?php echo htmlspecialchars($name); ?></h6>
+                                            <div class="fw-bold text-nowrap mb-2" style="color: var(--gold-primary); font-size: 0.92rem;">
+                                                Rs. <?php echo number_format($price, 2); ?>
+                                            </div>
+                                        </div>
+                                        <div class="product-card-actions" id="cardActions_<?php echo $id; ?>">
+                                            <?php if ($stock > 0): ?>
+                                                <button type="button" class="btn btn-luxury-gold btn-sm w-100 fw-bold rounded-pill add-to-cart-btn" onclick="event.stopPropagation(); addToCart(this)">
+                                                    <i class="fa-solid fa-plus me-1"></i> Add
+                                                </button>
+                                            <?php else: ?>
+                                                <button type="button" class="btn btn-secondary btn-sm w-100 fw-bold rounded-pill disabled opacity-50 border-0" disabled style="pointer-events: none;">
+                                                    Out of Stock
+                                                </button>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
-                                    <div class="product-card-actions" id="cardActions_<%= id %>">
-                                        <% if (stock > 0) { %>
-                                            <button type="button" class="btn btn-luxury-gold btn-sm w-100 fw-bold rounded-pill add-to-cart-btn" onclick="event.stopPropagation(); addToCart(this)">
-                                                <i class="fa-solid fa-plus me-1"></i> Add
-                                            </button>
-                                        <% } else { %>
-                                            <button type="button" class="btn btn-secondary btn-sm w-100 fw-bold rounded-pill disabled opacity-50 border-0" disabled style="pointer-events: none;">
-                                                Out of Stock
-                                            </button>
-                                        <% } %>
-                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        <% }); %>
-                    <% } else { %>
-                        <div class="col-12">
-                            <div class="p-5 text-center rounded-4 border border-secondary-subtle" style="background: var(--luxury-card-bg);">
-                                <i class="fa-solid fa-box-open fs-1 d-block mb-3" style="color: var(--gold-primary); opacity: 0.6;"></i>
-                                <h5 class="fw-bold">No Retail Items Found</h5>
-                                <p class="text-secondary small mb-0">Register merchandise in Inventory to populate the selling catalog.</p>
-                            </div>
-                        </div>
-                    <% } %>
+                            <?php
+                        }
+                    } else {
+                        echo '<div class="col-12"><div class="p-5 text-center rounded-4 border border-secondary-subtle" style="background: var(--luxury-card-bg);"><i class="fa-solid fa-box-open fs-1 d-block mb-3" style="color: var(--gold-primary); opacity: 0.6;"></i><h5 class="fw-bold">No Retail Items Found</h5><p class="text-secondary small mb-0">Register merchandise in Inventory to populate the selling catalog.</p></div></div>';
+                    }
+                    ?>
                 </div>
             </div>
 
             <!-- Right Side: Executive Cart Register -->
-            <div class="col-lg-4 cart-section p-3 p-md-4" id="cartSection">
+            <div class="col-lg-4 cart-section p-3 p-md-4 d-flex flex-column" id="cartSection">
                 <div class="d-flex justify-content-between align-items-center mb-3 pb-3 border-bottom border-secondary-subtle">
                     <div>
                         <span class="badge text-uppercase" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-size: 0.68rem; letter-spacing: 0.1em; font-weight: 700;">Checkout Register</span>
                         <h4 class="mb-0 fw-bold" style="font-family: 'Outfit', sans-serif;">Active Order</h4>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <button type="button" onclick="scrollToCatalog()" class="btn btn-outline-secondary btn-sm rounded-pill d-lg-none fw-semibold px-2.5 py-1" title="Back to products list">
-                            <i class="fa-solid fa-arrow-up me-1"></i> Catalog
-                        </button>
-                        <button type="button" class="btn btn-outline-danger btn-sm rounded-pill px-2.5 py-1 small fw-semibold" onclick="clearBasket()" title="Clear entire basket">
-                            <i class="fa-solid fa-trash me-1"></i>Clear All
+                        <button type="button" onclick="clearBasket()" class="btn btn-outline-danger btn-sm rounded-pill px-2.5 py-1 small fw-semibold" title="Clear entire basket">
+                            <i class="fa-solid fa-trash me-1"></i>Clear
                         </button>
                         <div class="position-relative d-inline-flex p-2 rounded-3" style="background: rgba(212, 175, 55, 0.1);">
                             <i id="cartIcon" class="fa-solid fa-basket-shopping fs-5" style="color: var(--gold-primary);"></i>
@@ -287,8 +335,8 @@
                         </span>
                         <span class="badge bg-secondary-subtle text-secondary small font-monospace" id="cartTotalUnitsCount">0 items</span>
                     </div>
-                    <!-- Cart Scrollable List: Guaranteed prominent height, no squashing -->
-                    <div class="overflow-y-auto rounded-4 p-2" style="min-height: 200px; max-height: 360px; background: rgba(0, 0, 0, 0.04); border: 1.5px solid var(--luxury-card-border); scrollbar-width: thin;" id="cartItemsContainer">
+                    <!-- Cart Scrollable List -->
+                    <div class="overflow-y-auto rounded-4 p-2" style="min-height: 180px; max-height: 320px; background: rgba(0, 0, 0, 0.04); border: 1.5px solid var(--luxury-card-border); scrollbar-width: thin;" id="cartItemsContainer">
                         <div class="text-center text-secondary py-5">
                             <i class="fa-solid fa-basket-shopping fs-1 d-block mb-2 opacity-25"></i>
                             <span class="small fw-semibold">Order basket is empty</span>
@@ -353,8 +401,7 @@
                 </div>
 
                 <!-- Payment Form -->
-                <form method="POST" action="/views/pos/sell.php" id="checkoutForm" class="mt-2">
-                    <!-- Hidden checkout attributes -->
+                <form method="POST" action="sell.php" id="checkoutForm" class="mt-auto">
                     <input type="hidden" name="cart_data" id="cartDataInput">
                     <input type="hidden" name="discount_type" id="discountTypeInput" value="none">
                     <input type="hidden" name="discount_value" id="discountValueInput" value="0">
@@ -372,7 +419,6 @@
                                 <span class="input-group-text bg-transparent border-secondary-subtle fw-bold" style="color: var(--gold-primary);">Rs.</span>
                                 <input type="number" id="cashReceived" name="received_amount" min="0" step="0.01" class="form-control border-secondary-subtle fw-bold fs-5" placeholder="0.00" oninput="calculateBalance()">
                             </div>
-                            <!-- Quick Cash Presets -->
                             <div class="d-flex gap-1 mt-2">
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="addCashPreset(500)">+500</button>
                                 <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 small rounded-pill flex-fill" onclick="addCashPreset(1000)">+1,000</button>
@@ -400,7 +446,7 @@
         </div>
     </div>
 
-    <!-- Mobile Floating Order Bar (Visible on mobile when order has items) -->
+    <!-- Mobile Floating Order Bar -->
     <div id="mobileStickyCartBar" class="mobile-floating-cart d-lg-none">
         <div class="d-flex align-items-center gap-2">
             <div class="position-relative">
@@ -421,92 +467,85 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Floating Toast for Mobile & Desktop POS Notifications
-        function showPosToast(msg, type = 'warning') {
-            let toast = document.getElementById('posFloatingToast');
-            if (!toast) {
-                toast = document.createElement('div');
-                toast.id = 'posFloatingToast';
-                toast.style.cssText = 'position: fixed; top: 24px; left: 50%; transform: translateX(-50%); z-index: 9999; max-width: 90%; transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1); pointer-events: none;';
-                document.body.appendChild(toast);
-            }
-            const bgClass = type === 'danger' ? 'bg-danger text-white' : (type === 'success' ? 'bg-success text-white' : 'bg-dark text-warning border border-warning border-opacity-50');
-            const icon = type === 'danger' ? 'fa-circle-xmark' : (type === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation');
-            toast.innerHTML = `
-                <div class="shadow-lg rounded-pill px-4 py-2.5 d-flex align-items-center gap-2 fw-bold ${bgClass}" style="backdrop-filter: blur(8px); box-shadow: 0 10px 30px rgba(0,0,0,0.35);">
-                    <i class="fa-solid ${icon}"></i>
-                    <span style="font-size: 0.88rem;">${msg}</span>
-                </div>
-            `;
-            toast.style.opacity = '1';
-            toast.style.transform = 'translateX(-50%) translateY(0)';
-            clearTimeout(toast._timer);
-            toast._timer = setTimeout(() => {
-                toast.style.opacity = '0';
-                toast.style.transform = 'translateX(-50%) translateY(-12px)';
-            }, 2600);
+        // Theme Toggle
+        const toggleBtn = document.getElementById('themeToggle');
+        const toggleBtnMobile = document.getElementById('themeToggleMobile');
+        const html = document.documentElement;
+
+        function updateThemeBtns(isDark) {
+            const icon = isDark ? '<i class="fa-solid fa-sun text-warning"></i> <span>Light Mode</span>' : '<i class="fa-solid fa-moon"></i> <span>Dark Mode</span>';
+            if (toggleBtn) toggleBtn.innerHTML = icon;
+            if (toggleBtnMobile) toggleBtnMobile.innerHTML = icon;
         }
 
-        function scrollToCart() {
-            const el = document.getElementById('cartSection');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            updateThemeBtns(true);
         }
 
-        function scrollToCatalog() {
-            const el = document.getElementById('productGrid');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-        }
-
-        function handleCardClick(id, cardElem) {
-            if (!cart[id]) {
-                const stock = parseInt(cardElem.getAttribute('data-stock'), 10) || 0;
-                if (stock <= 0) {
-                    showPosToast(`"${cardElem.getAttribute('data-name')}" is out of stock.`, 'warning');
-                    return;
-                }
-                const btn = cardElem.querySelector('.add-to-cart-btn');
-                if (btn) addToCart(btn);
+        function toggleTheme() {
+            if (html.getAttribute('data-bs-theme') === 'dark') {
+                html.setAttribute('data-bs-theme', 'light');
+                localStorage.setItem('theme', 'light');
+                updateThemeBtns(false);
+            } else {
+                html.setAttribute('data-bs-theme', 'dark');
+                localStorage.setItem('theme', 'dark');
+                updateThemeBtns(true);
             }
         }
+
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleTheme);
+        if (toggleBtnMobile) toggleBtnMobile.addEventListener('click', toggleTheme);
+
+        // Cart State & Discount State
+        let cart = {};
+        let grossSubtotal = 0;
+        let currentDiscountType = 'percentage'; // 'percentage' or 'fixed'
+        let currentDiscountValue = 0;
+        let currentDiscountAmount = 0;
+        let netTotal = 0;
 
         function filterItems() {
-            const query = document.getElementById('itemSearch').value.toLowerCase();
-            const cards = document.querySelectorAll('.product-card');
-            cards.forEach(card => {
-                const title = card.getAttribute('data-name').toLowerCase();
-                const wrapper = card.parentElement;
-                if (title.includes(query)) {
-                    wrapper.style.display = 'block';
+            const query = document.getElementById('itemSearch').value.toLowerCase().trim();
+            const cards = document.querySelectorAll('#productGrid .col-6');
+            
+            cards.forEach(col => {
+                const card = col.querySelector('.product-card');
+                const name = card.getAttribute('data-name').toLowerCase();
+                const id = card.getAttribute('data-id');
+                if (name.includes(query) || id.includes(query)) {
+                    col.style.display = 'block';
                 } else {
-                    wrapper.style.display = 'none';
+                    col.style.display = 'none';
                 }
             });
         }
 
-        let cart = {};
-        let currentDiscountType = 'percentage'; // 'percentage' or 'fixed'
-        let currentDiscountValue = 0;
-        let grossSubtotal = 0;
-        let currentDiscountAmount = 0;
-        let netTotal = 0;
+        function handleCardClick(id, cardElem) {
+            const addBtn = cardElem.querySelector('.add-to-cart-btn');
+            if (addBtn) {
+                addToCart(addBtn);
+            }
+        }
 
         function addToCart(btn) {
             const card = btn.closest('.product-card');
             const id = card.getAttribute('data-id');
             const name = card.getAttribute('data-name');
-            const price = parseFloat(card.getAttribute('data-price')) || 0;
+            const price = parseFloat(card.getAttribute('data-price'));
             const stock = parseInt(card.getAttribute('data-stock'), 10) || 9999;
-            const img = card.querySelector('.product-img');
+            const img = card.querySelector('img');
 
             if (cart[id]) {
                 if (cart[id].qty + 1 > stock) {
-                    showPosToast(`Cannot add more. Available stock for "${name}" is ${stock}.`, 'warning');
+                    alert(`Cannot add more. Available stock for "${name}" is ${stock}.`);
                     return;
                 }
                 cart[id].qty += 1;
             } else {
                 if (stock <= 0) {
-                    showPosToast(`"${name}" is out of stock.`, 'warning');
+                    alert(`"${name}" is out of stock.`);
                     return;
                 }
                 cart[id] = { name: name, price: price, qty: 1, id: id, maxStock: stock };
@@ -520,7 +559,7 @@
                 const targetQty = cart[id].qty + change;
                 const maxStock = cart[id].maxStock || 9999;
                 if (targetQty > maxStock) {
-                    showPosToast(`Maximum available stock for "${cart[id].name}" is ${maxStock}.`, 'warning');
+                    alert(`Maximum available stock for "${cart[id].name}" is ${maxStock}.`);
                     return;
                 }
                 if (targetQty <= 0) {
@@ -544,7 +583,7 @@
 
             const maxStock = cart[id].maxStock || 9999;
             if (val > maxStock) {
-                showPosToast(`Maximum available stock for "${cart[id].name}" is ${maxStock}.`, 'warning');
+                alert(`Maximum available stock for "${cart[id].name}" is ${maxStock}.`);
                 cart[id].qty = maxStock;
             } else {
                 cart[id].qty = val;
@@ -554,10 +593,8 @@
 
         function removeItem(id) {
             if (cart[id]) {
-                const name = cart[id].name;
                 delete cart[id];
                 updateCartUI();
-                showPosToast(`Removed "${name}" from order.`, 'success');
             }
         }
 
@@ -566,7 +603,6 @@
             cart = {};
             clearDiscount();
             updateCartUI();
-            showPosToast('Cleared all items from order.', 'success');
         }
 
         function setDiscountType(type) {
@@ -697,7 +733,6 @@
             const cartCountBadge = document.getElementById('cartCount');
             const kindsCountEl = document.getElementById('cartItemKindsCount');
             const totalUnitsEl = document.getElementById('cartTotalUnitsCount');
-            const mobileHeaderBadge = document.getElementById('mobileHeaderCartCount');
             const stickyBar = document.getElementById('mobileStickyCartBar');
             const stickyBadge = document.getElementById('mobileFloatingBadge');
             const stickyTotal = document.getElementById('mobileFloatingTotal');
@@ -766,15 +801,10 @@
                     </div>
                 `;
                 cartCountBadge.style.display = 'none';
-                if (mobileHeaderBadge) mobileHeaderBadge.style.display = 'none';
                 if (stickyBar) stickyBar.style.display = 'none';
             } else {
                 cartCountBadge.style.display = 'inline-block';
                 cartCountBadge.innerText = totalItems;
-                if (mobileHeaderBadge) {
-                    mobileHeaderBadge.style.display = 'inline-block';
-                    mobileHeaderBadge.innerText = totalItems;
-                }
                 if (stickyBar) {
                     if (window.innerWidth < 992) {
                         stickyBar.style.display = 'flex';
@@ -786,7 +816,7 @@
                 }
             }
 
-            // Sync indicators and quick action buttons on catalog product cards
+            // Sync indicators on catalog product cards
             document.querySelectorAll('.product-card').forEach(card => {
                 const cardId = card.getAttribute('data-id');
                 const badge = card.querySelector('.in-cart-badge');
@@ -845,6 +875,11 @@
             }
         });
 
+        function scrollToCart() {
+            const el = document.getElementById('cartSection');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+        }
+
         function setExactTender() {
             const cashInput = document.getElementById('cashReceived');
             if (cashInput) {
@@ -885,16 +920,11 @@
         function flyToCart(imgElement) {
             if (!imgElement) return;
             const cartIcon = document.getElementById('cartIcon');
-            const mobileBadge = document.getElementById('mobileHeaderCartCount');
             const floatingBar = document.getElementById('mobileStickyCartBar');
 
             let targetElem = cartIcon;
-            if (window.innerWidth < 992) {
-                if (floatingBar && floatingBar.style.display === 'flex') {
-                    targetElem = floatingBar;
-                } else if (mobileBadge && mobileBadge.offsetParent !== null) {
-                    targetElem = mobileBadge;
-                }
+            if (window.innerWidth < 992 && floatingBar && floatingBar.style.display === 'flex') {
+                targetElem = floatingBar;
             }
             if (!targetElem) return;
             
@@ -930,7 +960,7 @@
             const dateStr = now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' });
             const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
             const clockEl = document.getElementById('realtimeClock');
-            if (clockEl) clockEl.innerText = dateStr + ' • ' + timeStr;
+            if (clockEl) clockEl.innerHTML = '<i class="fa-regular fa-clock me-1"></i> ' + dateStr + ' &bull; ' + timeStr;
         }
         setInterval(updateClock, 1000);
         updateClock();

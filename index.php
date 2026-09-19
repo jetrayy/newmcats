@@ -1,3 +1,69 @@
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+
+session_start();
+
+/* DATABASE CONNECTION */
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "mcats";
+
+$conn = new mysqli($servername, $username, $password, $dbname);
+
+if ($conn->connect_error) {
+    die("Database Connection Failed: " . $conn->connect_error);
+}
+
+/* IF USER ALREADY LOGGED IN */
+if (isset($_SESSION['user_id'])) {
+    // Direct them back to their specific home if they try to visit index.php while logged in
+    if ($_SESSION['role'] == 'super_admin') {
+        header("Location: views/admin/sahome.php");
+    } else {
+        header("Location: views/admin/home.php");
+    }
+    exit();
+}
+
+$error_message = "";
+
+/* LOGIN PROCESS */
+if (isset($_POST['submit'])) {
+    $user_input = $_POST['username'];
+    $pass_input = $_POST['password'];
+
+    $stmt = $conn->prepare("SELECT * FROM users WHERE username=?");
+    $stmt->bind_param("s", $user_input);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows == 1) {
+        $user = $result->fetch_assoc();
+
+        if ($pass_input == $user['password']) {
+            $_SESSION['user_id'] = $user['user_id'];
+            $_SESSION['username'] = $user['username'];
+            $_SESSION['role'] = $user['role'];
+
+            // --- ROLE-BASED REDIRECT ---
+            if ($user['role'] == 'super_admin') {
+                header("Location: views/admin/sahome.php");
+            } else {
+                header("Location: views/admin/home.php");
+            }
+            exit();
+
+        } else {
+            $error_message = "Invalid Username or Password!";
+        }
+    } else {
+        $error_message = "Invalid Username or Password!";
+    }
+}
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -5,18 +71,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCATS | Mahinda Constructions & ToolShop</title>
-    <meta name="description" content="Multi-category POS and inventory management system with sales, rentals, and day session tracking">
-    <meta property="og:title" content="MCATS">
-    <meta property="og:description" content="Multi-category POS and inventory management system with sales, rentals, and day session tracking">
-    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
-    <!-- Instant theme apply — prevents flash -->
+    <link rel="icon" type="image/x-icon" href="img/ico.ico">
+    <!-- Instant theme apply - prevents flash -->
     <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'dark');</script>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Luxury Executive Design System -->
-    <link rel="stylesheet" href="/css/luxury.css">
+    <link rel="stylesheet" href="css/luxury.css">
     
     <style>
         body {
@@ -73,7 +136,7 @@
         }
 
         .right-panel {
-            background: linear-gradient(135deg, rgba(7, 10, 18, 0.85) 0%, rgba(11, 17, 32, 0.92) 100%), url('/img/loginimg.jpg') center center/cover no-repeat;
+            background: linear-gradient(135deg, rgba(7, 10, 18, 0.85) 0%, rgba(11, 17, 32, 0.92) 100%), url('img/loginimg.jpg') center center/cover no-repeat;
             height: 100vh;
             display: flex;
             align-items: center;
@@ -94,7 +157,7 @@
             font-weight: 600;
             margin-bottom: 1.5rem;
         }
-
+        
         @media (max-width: 768px) {
             body {
                 overflow: auto;
@@ -115,29 +178,26 @@
                 <div class="login-box">
                     <div class="text-center mb-4">
                         <div class="logo-wrap mb-3">
-                            <img src="/img/logo.png" class="logo" alt="MCATS Logo">
+                            <img src="img/logo.png" class="logo" alt="MCATS Logo">
                         </div>
                         <span class="brand-subtitle d-block mb-1">Mahinda Constructions & ToolShop</span>
                         <h2 class="text-white fw-bold mb-1">System Portal</h2>
                         <p class="text-muted small">Enter your credentials to access the terminal</p>
                     </div>
 
-                    <div id="loginAlertBox">
-                    <% const err = (typeof errorMessage !== 'undefined' && errorMessage) || (typeof error_message !== 'undefined' && error_message) || ''; %>
-                    <% if (err) { %>
+                    <?php if($error_message): ?>
                         <div class="alert alert-danger py-2 px-3 mb-4 rounded-3 d-flex align-items-center gap-2 border-0" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;" role="alert">
                             <i class="fa-solid fa-circle-exclamation"></i>
-                            <span class="small fw-semibold"><%= err %></span>
+                            <span class="small fw-semibold"><?php echo $error_message; ?></span>
                         </div>
-                    <% } %>
-                    </div>
+                    <?php endif; ?>
 
-                    <form id="loginForm" method="POST" action="/index.php">
+                    <form method="POST">
                         <div class="mb-3">
                             <label class="form-label text-white-50 small fw-semibold">Username</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent border-end-0 text-muted" style="border-color: rgba(255,255,255,0.12);"><i class="fa-solid fa-user"></i></span>
-                                <input type="text" id="usernameInput" class="form-control luxury-input border-start-0" name="username" placeholder="Enter username" required autocomplete="username" style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);" autofocus>
+                                <input type="text" class="form-control luxury-input border-start-0" name="username" placeholder="e.g. sa or admin" required style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);">
                             </div>
                         </div>
 
@@ -145,16 +205,16 @@
                             <label class="form-label text-white-50 small fw-semibold">Password</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-transparent border-end-0 text-muted" style="border-color: rgba(255,255,255,0.12);"><i class="fa-solid fa-lock"></i></span>
-                                <input type="password" id="passwordInput" class="form-control luxury-input border-start-0" name="password" placeholder="••••••••" required autocomplete="current-password" style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);">
+                                <input type="password" class="form-control luxury-input border-start-0" name="password" placeholder="Enter password" required style="background: rgba(255,255,255,0.03); color: #fff; border-color: rgba(255,255,255,0.12);">
                             </div>
                         </div>
 
-                        <button type="submit" id="submitBtn" name="submit" class="btn btn-luxury-gold btn-lg w-100 fw-bold">
+                        <button type="submit" name="submit" class="btn btn-luxury-gold btn-lg w-100 fw-bold">
                             Authenticate & Enter <i class="fa-solid fa-arrow-right ms-2"></i>
                         </button>
                     </form>
 
-                    <div class="mt-4 text-center pt-3 border-top" style="border-color: rgba(255,255,255,0.08) !important;">
+                    <div class="mt-5 text-center pt-3 border-top" style="border-color: rgba(255,255,255,0.08) !important;">
                         <span class="text-muted small d-block mb-1">
                             <i class="fa-solid fa-shield-halved me-1 text-warning"></i> Secure Terminal Access
                         </span>
@@ -190,7 +250,7 @@
                                 <i class="fa-solid fa-clock-rotate-left"></i>
                             </div>
                             <div>
-                                <h6 class="mb-0 fw-bold">Rentals & Returns</h6>
+                                <h6 class="mb-0 fw-bold">POS Rentals</h6>
                                 <small class="text-white-50">2-stage checkouts</small>
                             </div>
                         </div>
@@ -211,82 +271,5 @@
 
     <!-- Bootstrap JS Bundle -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-
-    <!-- Resilient Login & Iframe Session Script -->
-    <script>
-        function showAlert(msg) {
-            const box = document.getElementById('loginAlertBox');
-            box.innerHTML = `
-                <div class="alert alert-danger py-2 px-3 mb-4 rounded-3 d-flex align-items-center gap-2 border-0" style="background: rgba(239, 68, 68, 0.15); color: #fca5a5;" role="alert">
-                    <i class="fa-solid fa-circle-exclamation"></i>
-                    <span class="small fw-semibold">\${msg}</span>
-                </div>
-            `;
-        }
-
-        async function executeLogin(username, password) {
-            const btn = document.getElementById('submitBtn');
-            const origHtml = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span> Authenticating...';
-
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password, is_ajax: true })
-                });
-
-                const data = await response.json();
-                if (response.ok && data.success && data.redirect) {
-                    if (data.token) {
-                        try { localStorage.setItem('mcats_auth_token', data.token); } catch(e){}
-                    }
-                    window.location.href = data.redirect;
-                } else {
-                    showAlert(data.error || 'Invalid credentials provided. Please check username and password.');
-                    btn.disabled = false;
-                    btn.innerHTML = origHtml;
-                }
-            } catch (err) {
-                // If fetch fails for any reason, fall back to standard HTML form submission
-                document.getElementById('loginForm').submit();
-            }
-        }
-
-        // Form submit handler
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const u = document.getElementById('usernameInput').value;
-            const p = document.getElementById('passwordInput').value;
-            executeLogin(u, p);
-        });
-
-        // Check logout or resume existing token
-        (function() {
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('logout')) {
-                try { localStorage.removeItem('mcats_auth_token'); } catch(e){}
-                return;
-            }
-
-            const existingToken = localStorage.getItem('mcats_auth_token');
-            if (existingToken) {
-                fetch('/api/auth/check?auth_token=' + encodeURIComponent(existingToken))
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data && data.authenticated && data.redirect) {
-                            window.location.href = data.redirect;
-                        } else {
-                            try { localStorage.removeItem('mcats_auth_token'); } catch(e){}
-                        }
-                    })
-                    .catch(() => {});
-            }
-        })();
-    </script>
 </body>
 </html>

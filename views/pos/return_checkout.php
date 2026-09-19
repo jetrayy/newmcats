@@ -1,10 +1,151 @@
+<?php
+session_start();
+include_once __DIR__ . '/../../db.php';
+
+if (!isset($_SESSION['user_id'])) {
+    header("Location: ../../index.php");
+    exit();
+}
+
+if (!isset($_GET['bill_id'])) {
+    header("Location: return_items.php");
+    exit();
+}
+
+$bill_id = intval($_GET['bill_id']);
+$msg = "";
+
+// 1. Fetch Transaction Details
+$tsql = "SELECT t.*, c.full_name as c_name, c.phone_number as c_phone 
+         FROM transactions t 
+         LEFT JOIN customers c ON t.customer_nic = c.nic_number 
+         WHERE t.bill_number = ?";
+$stmt = $conn->prepare($tsql);
+$stmt->bind_param("i", $bill_id);
+$stmt->execute();
+$t_res = $stmt->get_result();
+if ($t_res->num_rows === 0) {
+    die("Transaction not found.");
+}
+$trans = $t_res->fetch_assoc();
+
+if ($trans['status'] === 'returned') {
+    $msg = "<div class='alert alert-warning shadow-sm rounded-3 mt-3'><i class='fa-solid fa-triangle-exclamation me-2'></i>This rental has already been returned and closed. <a href='print_bill.php?type=a4&bill_id=$bill_id' class='alert-link'>View Receipt</a></div>";
+}
+
+// 2. Fetch Rented Items
+$isql = "SELECT i.item_name, i.item_id, ti.id as ti_id, ti.quantity, ti.unit_price 
+         FROM transaction_items ti 
+         JOIN inventory i ON ti.item_id = i.item_id 
+         WHERE ti.bill_number = ?";
+$istmt = $conn->prepare($isql);
+$istmt->bind_param("i", $bill_id);
+$istmt->execute();
+$items_res = $istmt->get_result();
+
+$items = [];
+$total_hardware_value = 0;
+while($row = $items_res->fetch_assoc()) {
+    $items[] = $row;
+    $total_hardware_value += ($row['quantity'] * $row['unit_price']);
+}
+
+// Calculate Default Days based on timestamp
+$rentDate = new DateTime($trans['transaction_date']);
+$nowDate = new DateTime();
+$interval = $rentDate->diff($nowDate);
+$defaultDays = $interval->days;
+if ($defaultDays == 0) $defaultDays = 1;
+
+// 3. Process Final Return or Pay Later
+if (($_SERVER['REQUEST_METHOD'] === 'POST') && $trans['status'] !== 'returned') {
+    $cash_received = floatval($_POST['cash_received'] ?? 0);
+    $discount = floatval($_POST['discount'] ?? 0);
+    $is_pay_later = (isset($_POST['is_pay_later']) && $_POST['is_pay_later'] === '1') || (isset($_POST['action_type']) && $_POST['action_type'] === 'pay_later');
+    $due_date = trim($_POST['pay_later_due_date'] ?? '');
+    $pay_later_notes = trim($_POST['pay_later_notes'] ?? '');
+    
+    // Total cash collected over the lifespan of this bill
+    $new_received_total = floatval($trans['received_amount']) + $cash_received;
+    
+    $conn->begin_transaction();
+    try {
+        $gross_fee = 0;
+        
+        // Loop through submitted days per item and update DB + calculate fee
+        $upd_stmt = $conn->prepare("UPDATE transaction_items SET billed_days = ? WHERE id = ?");
+        if (isset($_POST['days']) && is_array($_POST['days'])) {
+            foreach ($_POST['days'] as $ti_id => $days) {
+                $days = intval($days);
+                $upd_stmt->bind_param("ii", $days, $ti_id);
+                $upd_stmt->execute();
+                // recalculate fee
+                foreach ($items as $itm) {
+                    if ($itm['ti_id'] == $ti_id) {
+                        $gross_fee += ($itm['quantity'] * $itm['unit_price'] * $days);
+                    }
+                }
+            }
+        }
+        
+        $final_fee = max(0, $gross_fee - $discount);
+        $new_balance = $new_received_total - $final_fee;
+
+        $target_status = $is_pay_later ? 'pay_later' : 'returned';
+
+        $notes = trim($trans['notes'] ?? '');
+        if ($is_pay_later) {
+            $due_val = max(0, $final_fee - $new_received_total);
+            $agreement = "Pay Later Agreement: Due Rs. " . number_format($due_val, 2);
+            if ($pay_later_notes) $agreement .= " | " . $pay_later_notes;
+            if ($due_date) $agreement .= " (Promised by " . $due_date . ")";
+            $notes = $notes ? ($notes . " | " . $agreement) : $agreement;
+        }
+
+        // Update transaction
+        $u_sql = "UPDATE transactions 
+                  SET status = ?, 
+                      subtotal_lkr = ?, 
+                      discount_amount = ?, 
+                      total_lkr = ?, 
+                      received_amount = ?, 
+                      balance_amount = ?,
+                      notes = ? 
+                  WHERE bill_number = ?";
+        $u_stmt = $conn->prepare($u_sql);
+        $u_stmt->bind_param("sdddddsi", $target_status, $gross_fee, $discount, $final_fee, $new_received_total, $new_balance, $notes, $bill_id);
+        $u_stmt->execute();
+
+        // Release inventory back to available
+        $inv_sql = "UPDATE inventory SET status='available' WHERE item_id = ?";
+        $inv_stmt = $conn->prepare($inv_sql);
+        foreach ($items as $item) {
+            $inv_stmt->bind_param("i", $item['item_id']);
+            $inv_stmt->execute();
+        }
+
+        $conn->commit();
+
+        if ($is_pay_later) {
+            header("Location: print_bill.php?type=thermal_pay_later&bill_id=$bill_id");
+        } else {
+            header("Location: print_bill.php?type=a4&bill_id=$bill_id");
+        }
+        exit();
+
+    } catch (Exception $e) {
+        $conn->rollback();
+        $msg = "<div class='alert alert-danger shadow-sm rounded-3 mt-3'><i class='fa-solid fa-triangle-exclamation me-2'></i>Error processing return: " . $e->getMessage() . "</div>";
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCATS | Lease Settlement #<%= billId %></title>
-    <link rel="icon" type="image/x-icon" href="/img/ico.ico">
+    <title>MCATS | Lease Settlement #<?php echo $bill_id; ?></title>
+    <link rel="icon" type="image/x-icon" href="../../img/ico.ico">
     <!-- Instant theme apply — prevents flash -->
     <script>document.documentElement.setAttribute('data-bs-theme', localStorage.getItem('theme') || 'light');</script>
     <!-- Google Fonts -->
@@ -16,7 +157,7 @@
     <!-- Font Awesome 6 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Luxury Core CSS -->
-    <link rel="stylesheet" href="/css/luxury.css">
+    <link rel="stylesheet" href="../../css/luxury.css">
     <style>
         body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--luxury-body-bg); min-height: 100vh; display: flex; flex-direction: column; }
         .top-navbar {
@@ -34,34 +175,38 @@
 </head>
 <body>
 
+    <!-- Global Navigation Bar -->
+    <?php include_once __DIR__ . '/../includes/navbar.php'; ?>
+
     <div class="top-navbar d-flex justify-content-between align-items-center flex-wrap gap-3">
         <div class="d-flex align-items-center gap-3">
             <div class="d-flex align-items-center justify-content-center rounded-circle" style="width: 42px; height: 42px; background: rgba(212, 175, 55, 0.15); border: 1px solid rgba(212, 175, 55, 0.3);">
                 <i class="fa-solid fa-receipt" style="color: var(--gold-primary);"></i>
             </div>
             <div>
-                <h5 class="mb-0 fw-bold text-white" style="font-family: 'Outfit', sans-serif; letter-spacing: 0.04em;">Lease Settlement & Return #<%= billId %></h5>
+                <h5 class="mb-0 fw-bold text-white" style="font-family: 'Outfit', sans-serif; letter-spacing: 0.04em;">Lease Settlement & Return #<?php echo $bill_id; ?></h5>
                 <small class="text-secondary">Calculate final billable days and release equipment</small>
             </div>
         </div>
         <div class="d-flex align-items-center gap-2">
-            <a href="/views/pos/return_items.php" class="btn btn-sm btn-outline-secondary text-white rounded-pill px-3 shadow-sm border-secondary">
-                <i class="fa-solid fa-arrow-left me-1"></i> Return Desk
+            <button id="themeToggle" class="btn btn-sm btn-outline-secondary text-white rounded-pill px-3 shadow-sm border-secondary">
+                <i class="fa-solid fa-moon me-1"></i> Dark Mode
+            </button>
+            <a href="pay_later.php" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-semibold shadow-sm">
+                <i class="fa-solid fa-clock-rotate-left me-1"></i> Pay Later Desk
             </a>
-            <a href="/views/pos/pay_later.php" class="btn btn-sm btn-outline-warning rounded-pill px-3 fw-semibold shadow-sm">
-                <i class="fa-solid fa-clock-rotate-left me-1"></i> Pay Later
+            <a href="return_items.php" class="btn btn-sm btn-outline-secondary text-white rounded-pill px-3 shadow-sm border-secondary">
+                <i class="fa-solid fa-arrow-left me-1"></i> Return Directory
             </a>
-            <a href="/views/pos/rent.php" class="btn btn-sm btn-luxury-gold rounded-pill px-3 fw-bold shadow-sm">
-                <i class="fa-solid fa-cart-flatbed me-1"></i> Back to Rentals
+            <a href="rent.php" class="btn btn-sm btn-luxury-gold rounded-pill px-3 fw-bold shadow-sm">
+                <i class="fa-solid fa-cart-flatbed me-1"></i> Back to POS
             </a>
         </div>
     </div>
 
     <div class="container py-4 flex-grow-1" style="max-width: 1250px;">
         
-        <% if (typeof msg !== 'undefined' && msg) { %>
-            <%- msg %>
-        <% } %>
+        <?php if($msg) echo $msg; ?>
 
         <div class="row g-4 mt-1">
             
@@ -74,7 +219,7 @@
                             Agreement Overview
                         </h5>
                         <span class="badge" style="background: rgba(212, 175, 55, 0.15); color: var(--gold-primary); font-size: 0.75rem;">
-                            Docket #<%= billId %>
+                            Docket #<?php echo $bill_id; ?>
                         </span>
                     </div>
                     
@@ -82,23 +227,19 @@
                         <div class="col-md-6">
                             <div class="p-3 rounded-4 h-100" style="background: rgba(0, 0, 0, 0.03); border: 1px solid var(--luxury-card-border);">
                                 <div class="text-uppercase fw-bold text-secondary small mb-1" style="font-size: 0.72rem; letter-spacing: 0.08em;">Client Profile</div>
-                                <div class="fw-bold fs-6 mb-1"><%= trans.c_name || 'Walk-in Customer' %></div>
+                                <div class="fw-bold fs-6 mb-1"><?php echo htmlspecialchars($trans['c_name'] ?: 'Walk-in Customer'); ?></div>
                                 <div class="text-secondary small">
-                                    <i class="fa-regular fa-id-card me-1"></i><%= trans.customer_nic || 'No NIC' %><br>
-                                    <i class="fa-solid fa-phone me-1"></i><%= trans.c_phone || 'No Phone' %>
+                                    <i class="fa-regular fa-id-card me-1"></i><?php echo htmlspecialchars($trans['customer_nic'] ?: 'No NIC'); ?><br>
+                                    <i class="fa-solid fa-phone me-1"></i><?php echo htmlspecialchars($trans['c_phone'] ?: 'No Phone'); ?>
                                 </div>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="p-3 rounded-4 h-100" style="background: rgba(0, 0, 0, 0.03); border: 1px solid var(--luxury-card-border);">
                                 <div class="text-uppercase fw-bold text-secondary small mb-1" style="font-size: 0.72rem; letter-spacing: 0.08em;">Dispatched Timestamp</div>
-                                <div class="fw-bold fs-6 mb-2">
-                                    <% const d = new Date(trans.transaction_date); %>
-                                    <%= d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) %>
-                                    <span class="text-secondary small fw-normal ms-1"><%= d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) %></span>
-                                </div>
+                                <div class="fw-bold fs-6 mb-2"><?php echo date("M j, Y", strtotime($trans['transaction_date'])); ?> <span class="text-secondary small fw-normal ms-1"><?php echo date("g:i A", strtotime($trans['transaction_date'])); ?></span></div>
                                 <div class="fw-bold text-success bg-success bg-opacity-10 px-2 py-1 rounded d-inline-block small border border-success border-opacity-25">
-                                    Advance Deposited: Rs. <%= Number(trans.advance_paid || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %>
+                                    Advance Deposited: Rs. <?php echo number_format($trans['advance_paid'], 2); ?>
                                 </div>
                             </div>
                         </div>
@@ -106,7 +247,7 @@
 
                     <div class="d-flex justify-content-between align-items-center mt-3 mb-2">
                         <div class="fw-bold text-secondary text-uppercase small" style="letter-spacing: 0.05em;">Dispatched Equipment & Duration</div>
-                        <div class="badge text-secondary border border-secondary-subtle">Est. Valuation: Rs. <%= Number(typeof totalHardwareValue !== 'undefined' ? totalHardwareValue : 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></div>
+                        <div class="badge text-secondary border border-secondary-subtle">Est. Valuation: Rs. <?php echo number_format($total_hardware_value,2); ?></div>
                     </div>
                     <div class="table-responsive border border-secondary-subtle rounded-4 overflow-hidden">
                         <table class="table table-hover mb-0">
@@ -119,20 +260,20 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <% items.forEach(function(item) { %>
+                                <?php foreach($items as $item): ?>
                                 <tr class="border-bottom border-secondary-subtle">
                                     <td class="align-middle ps-3">
-                                        <div class="fw-bold"><i class="fa-solid fa-camera-retro me-2 text-secondary small"></i><%= item.item_name %></div>
-                                        <div class="small text-secondary">Units: <%= item.quantity %></div>
+                                        <div class="fw-bold"><i class="fa-solid fa-camera-retro me-2 text-secondary small"></i><?php echo htmlspecialchars($item['item_name']); ?></div>
+                                        <div class="small text-secondary">Units: <?php echo $item['quantity']; ?></div>
                                     </td>
-                                    <td class="align-middle text-center small fw-semibold">Rs. <%= Number(item.unit_price).toFixed(2) %></td>
+                                    <td class="align-middle text-center small fw-semibold">Rs. <?php echo number_format($item['unit_price'], 2); ?></td>
                                     <td class="align-middle" style="width: 110px;">
-                                        <input type="number" form="settleForm" name="days[<%= item.ti_id %>]" class="form-control form-control-sm text-center item-days fw-bold" min="1" value="<%= defaultDays %>" 
-                                            data-qty="<%= item.quantity %>" data-price="<%= item.unit_price %>" oninput="calculateSettle()">
+                                        <input type="number" form="settleForm" name="days[<?php echo $item['ti_id']; ?>]" class="form-control form-control-sm text-center item-days fw-bold" min="1" value="<?php echo $defaultDays; ?>" 
+                                            data-qty="<?php echo $item['quantity']; ?>" data-price="<?php echo $item['unit_price']; ?>" oninput="calculateSettle()">
                                     </td>
                                     <td class="align-middle text-end fw-bold item-amt pe-3" style="color: var(--gold-primary);">Rs. 0.00</td>
                                 </tr>
-                                <% }); %>
+                                <?php endforeach; ?>
                             </tbody>
                         </table>
                     </div>
@@ -149,8 +290,8 @@
                         </h5>
                     </div>
                     
-                    <% if (trans.status !== 'returned') { %>
-                    <form method="POST" action="/views/pos/return_checkout.php?bill_id=<%= billId %>" id="settleForm">
+                    <?php if ($trans['status'] !== 'returned'): ?>
+                    <form method="POST" id="settleForm">
                         <div class="mb-3">
                             <label class="form-label fw-bold small text-secondary text-uppercase mb-1" style="letter-spacing: 0.05em;">Total Final Rental Charge</label>
                             <div class="input-group input-group-lg">
@@ -180,7 +321,7 @@
                             <div class="text-secondary small mt-1"><i class="fa-solid fa-hand-holding-dollar me-1"></i>Enter how much cash the customer can pay now. Balance can be deferred.</div>
                         </div>
 
-                        <!-- Pay Later Hidden Input -->
+                        <!-- Pay Later Hidden Inputs -->
                         <input type="hidden" name="is_pay_later" id="isPayLaterInput" value="0">
                         <input type="hidden" name="action_type" id="actionTypeInput" value="settle">
 
@@ -196,7 +337,7 @@
                             </div>
                             <div class="d-flex justify-content-between mb-3 small fw-semibold text-secondary border-top border-secondary-subtle pt-2">
                                 <span>Less Security Advance Held:</span>
-                                <span class="text-success">- Rs. <%= Number(trans.advance_paid || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) %></span>
+                                <span class="text-success">- Rs. <?php echo number_format($trans['advance_paid'], 2); ?></span>
                             </div>
                             <div class="d-flex justify-content-between pt-2 border-top border-secondary-subtle mb-3">
                                 <span class="fw-bold">Net Remaining Due:</span>
@@ -210,26 +351,26 @@
                         </div>
 
                         <!-- Action Buttons: Settle and Pay Later -->
-                        <div class="d-flex flex-column flex-sm-row gap-3">
-                            <button type="button" class="btn btn-luxury-gold btn-lg flex-grow-1 fw-bold shadow rounded-pill py-3" id="btnSubmitSettle" onclick="submitReturnCheckout(false)">
+                        <div class="d-flex flex-column gap-2">
+                            <button type="button" class="btn btn-luxury-gold btn-lg w-100 fw-bold shadow rounded-pill py-3" id="btnSubmitSettle" onclick="submitReturnCheckout(false)">
                                 <i class="fa-solid fa-check-double me-2"></i> Finalize Return & Print Settlement
                             </button>
-                            <button type="button" class="btn btn-warning btn-lg fw-bold shadow-sm rounded-pill py-3 px-4 text-dark" id="btnPayLater" onclick="submitReturnCheckout(true)">
+                            <button type="button" class="btn btn-warning btn-lg fw-bold shadow-sm rounded-pill py-3 px-4 text-dark w-100" id="btnPayLater" onclick="submitReturnCheckout(true)" style="display: none;">
                                 <i class="fa-solid fa-clock-rotate-left me-2"></i> Pay Later
                             </button>
                         </div>
                     </form>
-                    <% } else { %>
+                    <?php else: ?>
                         <div class="alert alert-success mt-4 p-4 rounded-4 border-0 shadow-sm">
                             <h5 class="alert-heading fw-bold mb-3 d-flex align-items-center gap-2">
                                 <i class="fa-solid fa-circle-check"></i> Agreement Closed & Reconciled
                             </h5>
                             <hr>
-                            <div class="d-flex justify-content-between mb-2"><span class="text-secondary">Gross Charge:</span> <span class="fw-bold">Rs. <%= Number(trans.total_lkr || 0).toFixed(2) %></span></div>
-                            <div class="d-flex justify-content-between mb-2"><span class="text-secondary">Total Cash Tendered:</span> <span class="fw-bold">Rs. <%= Number(trans.received_amount || 0).toFixed(2) %></span></div>
-                            <div class="d-flex justify-content-between"><span class="text-secondary">Change Remitted:</span> <span class="fw-bold text-success">Rs. <%= Number(trans.balance_amount || 0).toFixed(2) %></span></div>
+                            <div class="d-flex justify-content-between mb-2"><span class="text-secondary">Gross Charge:</span> <span class="fw-bold">Rs. <?php echo number_format($trans['total_lkr'], 2); ?></span></div>
+                            <div class="d-flex justify-content-between mb-2"><span class="text-secondary">Total Cash Tendered:</span> <span class="fw-bold">Rs. <?php echo number_format($trans['received_amount'], 2); ?></span></div>
+                            <div class="d-flex justify-content-between"><span class="text-secondary">Change Remitted:</span> <span class="fw-bold text-success">Rs. <?php echo number_format($trans['balance_amount'], 2); ?></span></div>
                         </div>
-                    <% } %>
+                    <?php endif; ?>
                 </div>
             </div>
 
@@ -239,8 +380,34 @@
     <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const toggleBtn = document.getElementById('themeToggle');
+        const html = document.documentElement;
+
+        function updateThemeBtns(isDark) {
+            if (toggleBtn) toggleBtn.innerHTML = isDark ? '<i class="fa-solid fa-sun me-1 text-warning"></i> Light Mode' : '<i class="fa-solid fa-moon me-1"></i> Dark Mode';
+        }
+
+        if (localStorage.getItem('theme') === 'dark') {
+            html.setAttribute('data-bs-theme', 'dark');
+            updateThemeBtns(true);
+        }
+
+        if (toggleBtn) {
+            toggleBtn.addEventListener('click', () => {
+                if (html.getAttribute('data-bs-theme') === 'dark') {
+                    html.setAttribute('data-bs-theme', 'light');
+                    localStorage.setItem('theme', 'light');
+                    updateThemeBtns(false);
+                } else {
+                    html.setAttribute('data-bs-theme', 'dark');
+                    localStorage.setItem('theme', 'dark');
+                    updateThemeBtns(true);
+                }
+            });
+        }
+
         // Calculation Logic
-        const advance = <%= Number(trans.advance_paid || 0) %>;
+        const advance = <?php echo floatval($trans['advance_paid']); ?>;
 
         function submitReturnCheckout(isPayLater) {
             document.getElementById('isPayLaterInput').value = isPayLater ? '1' : '0';
